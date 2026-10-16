@@ -37,14 +37,18 @@ async function readProject() {
   }
   const chaptersDir = insideProject("Chapters");
   const charactersDir = insideProject("Characters");
+  const placesDir = insideProject("Places");
   await fs.mkdir(chaptersDir, { recursive: true });
   await fs.mkdir(charactersDir, { recursive: true });
+  await fs.mkdir(placesDir, { recursive: true });
   await fs.mkdir(insideProject(".mycel"), { recursive: true });
   const chapters = [];
   const characters = [];
+  const places = [];
   for (const [folder, into, kind] of [
     ["Chapters", chapters, "chapter"],
     ["Characters", characters, "character"],
+    ["Places", places, "place"],
   ]) {
     const files = (
       await fs.readdir(insideProject(folder), { withFileTypes: true })
@@ -101,17 +105,64 @@ async function readProject() {
             insideProject(...String(record.image).split("/")),
           ).href;
       }
+      if (kind === "place") {
+        const frontmatter = body.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+        if (frontmatter) {
+          const field = (name) =>
+            frontmatter[1].match(
+              new RegExp("^" + name + ":\\s*(.*)$", "m"),
+            )?.[1] || "";
+          const parse = (value, fallback = "") => {
+            try {
+              return JSON.parse(value);
+            } catch {
+              return value || fallback;
+            }
+          };
+          record.name ||= parse(field("name"), id);
+          const aliases = parse(field("aliases"), []);
+          record.aliases ||= Array.isArray(aliases)
+            ? aliases
+            : String(aliases)
+                .split(/[;,]/)
+                .map((alias) => alias.trim())
+                .filter(Boolean);
+          record.category ||= parse(field("category"), "Ort");
+          record.continent ||= parse(field("continent"), "");
+          record.region ||= parse(field("region"), "");
+          record.city ||= parse(field("city"), "");
+          if (record.parent === undefined)
+            record.parent = parse(field("parent"), "");
+          record.color ||= parse(field("color"), "");
+          record.traits ||= parse(field("traits"), "");
+          record.description ||= body.slice(frontmatter[0].length).trim();
+        }
+        record.name ||= id;
+        record.aliases ||= [];
+        record.category ||= "Ort";
+        record.continent ||= "";
+        record.region ||= "";
+        record.city ||= "";
+        if (record.parent === undefined) record.parent = "";
+        record.color ||= "";
+        record.traits ||= "";
+        record.description ||= "";
+      }
       into.push({ id, file: folder + "/" + file.name, body, ...record });
     }
   }
   chapters.sort(
     (a, b) => (a.order ?? 9999) - (b.order ?? 9999) || a.id.localeCompare(b.id),
   );
+  places.sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true }),
+  );
   return {
     name: metadata.name || path.basename(projectRoot),
     root: projectRoot,
     chapters,
     characters,
+    places,
     goal: metadata.goal || 100000,
     history: metadata.history || [],
   };
@@ -277,6 +328,57 @@ ${record.description}
     const characters = await readMetadataPart("characters");
     delete characters[id];
     await writeMetadata({ characters });
+    return true;
+  });
+  ipcMain.handle("place:save", async (_event, place) => {
+    const id = safeId(place.id || place.name);
+    const file = insideProject("Places", id + ".md");
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    const record = {
+      name: String(place.name || "").trim(),
+      aliases: String(place.aliases || "")
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean),
+      category: String(place.category || "Ort"),
+      continent: String(place.continent || "").trim(),
+      region: String(place.region || "").trim(),
+      city: String(place.city || "").trim(),
+      parent: String(place.parent || ""),
+      description: String(place.description || ""),
+      traits: String(place.traits || ""),
+      color: /^#[0-9a-f]{6}$/i.test(String(place.color || ""))
+        ? String(place.color)
+        : "#d9e8ff",
+    };
+    const markdown = `---
+name: ${JSON.stringify(record.name)}
+aliases: ${JSON.stringify(record.aliases)}
+category: ${JSON.stringify(record.category)}
+continent: ${JSON.stringify(record.continent)}
+region: ${JSON.stringify(record.region)}
+city: ${JSON.stringify(record.city)}
+parent: ${JSON.stringify(record.parent)}
+color: ${JSON.stringify(record.color)}
+traits: ${JSON.stringify(record.traits)}
+---
+
+${record.description}
+`;
+    await fs.writeFile(file, markdown, "utf8");
+    await writeMetadata({
+      places: { ...(await readMetadataPart("places")), [id]: record },
+    });
+    return { id, file: "Places/" + id + ".md" };
+  });
+  ipcMain.handle("place:delete", async (_event, idValue) => {
+    const id = safeId(idValue);
+    await fs.rm(insideProject("Places", id + ".md"), { force: true });
+    const places = await readMetadataPart("places");
+    delete places[id];
+    for (const place of Object.values(places))
+      if (place.parent === id) place.parent = "";
+    await writeMetadata({ places });
     return true;
   });
   ipcMain.handle("project:settings", async (_event, settings) => {

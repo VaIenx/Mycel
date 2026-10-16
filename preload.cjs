@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld("mycel", {
   saveCharacter: (character) => ipcRenderer.invoke("character:save", character),
   chooseCharacterImage: () => ipcRenderer.invoke("character:choose-image"),
   deleteCharacter: (id) => ipcRenderer.invoke("character:delete", id),
+  savePlace: (place) => ipcRenderer.invoke("place:save", place),
+  deletePlace: (id) => ipcRenderer.invoke("place:delete", id),
   saveSettings: (settings) => ipcRenderer.invoke("project:settings", settings),
   saveSession: (entry) => ipcRenderer.invoke("project:session", entry),
 });

@@ -779,9 +779,15 @@ select {
 }
 .dialog-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  gap: 9px;
+  gap: 12px;
   margin-top: 20px;
+}
+.dialog-actions > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 .detail-panel {
   display: grid;
@@ -918,8 +924,10 @@ body::before {
   pointer-events: none;
   background-image:
     linear-gradient(rgba(74, 103, 80, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(74, 103, 80, 0.035) 1px, transparent 1px);
-  background-size: 24px 24px;
+    linear-gradient(90deg, rgba(74, 103, 80, 0.035) 1px, transparent 1px),
+    linear-gradient(rgba(74, 103, 80, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74, 103, 80, 0.045) 1px, transparent 1px);
+  background-size: 24px 24px, 24px 24px, 120px 120px, 120px 120px;
 }
 
 .app-shell {
@@ -1093,6 +1101,76 @@ select {
 
 .character-card {
   background: #f3f5ed;
+}
+
+.place-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.place-tools .search {
+  margin-left: 0;
+}
+.place-card {
+  min-height: 210px;
+  padding: 18px;
+  border: 1px solid #bdcbb9;
+  border-radius: 3px;
+  background: #f3f5ed;
+  color: var(--ink);
+  cursor: pointer;
+}
+.place-card:hover {
+  border-color: #8fa68f;
+  background: #edf3e9;
+}
+.place-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.place-card-top i {
+  width: 14px;
+  height: 14px;
+  border: 1px solid #718378;
+  background: var(--character-highlight);
+}
+.place-card h3 {
+  margin: 16px 0 5px;
+  font-size: 20px;
+}
+.place-path {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.place-card p {
+  min-height: 38px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.place-card small {
+  color: var(--muted);
+}
+.place-detail {
+  display: grid;
+  gap: 14px;
+}
+.place-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.place-children {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.place-detail h3 {
+  margin: 8px 0 0;
 }
 
 .character-cover {

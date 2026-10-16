@@ -46,7 +46,10 @@ const characterColors = [
 ];
 const characterColor = (
   character,
-  characters = state.project?.characters || [],
+  characters = [
+    ...(state.project?.characters || []),
+    ...(state.project?.places || []),
+  ],
 ) => {
   if (/^#[0-9a-f]{6}$/i.test(character.color || "")) return character.color;
   const used = new Set(
@@ -441,6 +444,145 @@ function renderCharacters() {
     </button>`;
 }
 
+function placeAncestors(place) {
+  const ancestors = [];
+  const seen = new Set([place.id]);
+  let parentId = place.parent;
+  while (parentId && !seen.has(parentId)) {
+    seen.add(parentId);
+    const parent = state.project.places.find((item) => item.id === parentId);
+    if (!parent) break;
+    ancestors.unshift(parent);
+    parentId = parent.parent;
+  }
+  return ancestors;
+}
+
+function placePath(place) {
+  return [...placeAncestors(place).map((item) => item.name), place.name]
+    .filter(Boolean)
+    .join(" › ");
+}
+
+function placeContinent(place) {
+  if (place.continent) return place.continent;
+  return (
+    [...placeAncestors(place), place].find(
+      (item) => item.category === "Kontinent",
+    )?.name || ""
+  );
+}
+
+function placeCity(place) {
+  if (place.city) return place.city;
+  return (
+    [...placeAncestors(place), place].find((item) => item.category === "Stadt")
+      ?.name || ""
+  );
+}
+
+function placeRegion(place) {
+  if (place.region) return place.region;
+  return (
+    [...placeAncestors(place), place]
+      .reverse()
+      .find((item) => ["Land", "Region"].includes(item.category))?.name || ""
+  );
+}
+
+function placeCard(place) {
+  return html`<article
+    class="place-card"
+    data-action="open-place"
+    data-id="${esc(place.id)}"
+  >
+    <div class="place-card-top">
+      <span class="role-chip">${esc(place.category || "Ort")}</span>
+      <i style="--character-highlight: ${characterColor(place)}"></i>
+    </div>
+    <h3>${esc(place.name)}</h3>
+    <div class="place-path">${esc(placePath(place))}</div>
+    <p>
+      ${esc(
+        excerpt(
+          place.description || place.traits || "Noch keine Beschreibung.",
+          120,
+        ),
+      )}
+    </p>
+    <small
+      >${esc(
+        [placeContinent(place), placeRegion(place), placeCity(place)]
+          .filter(Boolean)
+          .join(" · ") || "Noch nicht geografisch eingeordnet",
+      )}</small
+    >
+  </article>`;
+}
+
+function renderPlaces() {
+  const places = state.project.places || [];
+  const categories = [
+    ...new Set(places.map((place) => place.category || "Ort")),
+  ];
+  const continents = [
+    ...new Set(places.map(placeContinent).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b));
+  const regions = [...new Set(places.map(placeRegion).filter(Boolean))].sort(
+    (a, b) => a.localeCompare(b),
+  );
+  const cities = [...new Set(places.map(placeCity).filter(Boolean))].sort(
+    (a, b) => a.localeCompare(b),
+  );
+  return html`${heading(
+      "Orte",
+      html`<button class="button primary" data-action="new-place">
+        ＋ Ort
+      </button>`,
+    )}
+    <div class="place-tools">
+      <input class="search" id="place-search" placeholder="Ort suchen …" />
+      <select class="select-like" id="place-category-filter">
+        <option value="all">Alle Kategorien</option>
+        ${categories
+          .map((value) => html`<option>${esc(value)}</option>`)
+          .join("")}
+      </select>
+      <select class="select-like" id="place-continent-filter">
+        <option value="all">Alle Kontinente</option>
+        ${continents
+          .map((value) => html`<option>${esc(value)}</option>`)
+          .join("")}
+      </select>
+      <select class="select-like" id="place-city-filter">
+        <option value="all">Alle Städte</option>
+        ${cities.map((value) => html`<option>${esc(value)}</option>`).join("")}
+      </select>
+      <select class="select-like" id="place-region-filter">
+        <option value="all">Alle Regionen</option>
+        ${regions.map((value) => html`<option>${esc(value)}</option>`).join("")}
+      </select>
+      <select class="select-like" id="place-sort">
+        <option value="name">Sortieren: Name</option>
+        <option value="category">Kategorie</option>
+        <option value="continent">Kontinent</option>
+        <option value="city">Stadt</option>
+        <option value="region">Region</option>
+        <option value="hierarchy">Ortskette</option>
+      </select>
+    </div>
+    <div class="grid" id="place-grid">
+      ${places.length
+        ? places.map(placeCard).join("")
+        : emptyState(
+            "Noch keine Orte",
+            "Lege Kontinente, Städte und Schauplätze an.",
+            "Ort erstellen",
+            "new-place",
+          )}
+    </div>`;
+}
+
 function renderWriting() {
   const chapters = state.project.chapters;
   if (!state.activeChapter && chapters.length)
@@ -629,22 +771,25 @@ function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function characterMatchData(characters) {
+function characterMatchData(characters, places) {
   const matches = new Map();
-  characters.forEach((character) => {
-    [character.name, ...(character.aliases || [])]
+  [
+    ...characters.map((character) => ({ ...character, kind: "character" })),
+    ...places.map((place) => ({ ...place, kind: "place" })),
+  ].forEach((entity) => {
+    [entity.name, ...(entity.aliases || [])]
       .map((name) => String(name || "").trim())
       .filter(Boolean)
       .forEach((name) => {
         const key = name.toLocaleLowerCase("de-DE");
-        if (!matches.has(key)) matches.set(key, { name, character });
+        if (!matches.has(key)) matches.set(key, { name, entity });
       });
   });
   return [...matches.values()].sort((a, b) => b.name.length - a.name.length);
 }
 
-function highlightedText(text, characters) {
-  const matches = characterMatchData(characters);
+function highlightedText(text, characters, places) {
+  const matches = characterMatchData(characters, places);
   if (!matches.length) return esc(text);
   const expression = new RegExp(
     `(?<![\\p{L}\\p{N}_])(?:${matches
@@ -653,21 +798,19 @@ function highlightedText(text, characters) {
     "giu",
   );
   const byName = new Map(
-    matches.map(({ name, character }) => [
+    matches.map(({ name, entity }) => [
       name.toLocaleLowerCase("de-DE"),
-      character,
+      entity,
     ]),
   );
   let output = "";
   let previous = 0;
   for (const match of text.matchAll(expression)) {
     output += esc(text.slice(previous, match.index));
-    const character = byName.get(match[0].toLocaleLowerCase("de-DE"));
-    output += `<span class="character-mention" data-character-id="${esc(
-      character.id,
-    )}" data-action="open-character" data-id="${esc(
-      character.id,
-    )}" style="--character-highlight: ${characterColor(character)}">${esc(
+    const entity = byName.get(match[0].toLocaleLowerCase("de-DE"));
+    output += `<span class="character-mention" data-action="open-${entity.kind}" data-id="${esc(
+      entity.id,
+    )}" style="--character-highlight: ${characterColor(entity)}">${esc(
       match[0],
     )}</span>`;
     previous = match.index + match[0].length;
@@ -675,10 +818,24 @@ function highlightedText(text, characters) {
   return output + esc(text.slice(previous));
 }
 
-function showCharacterTooltip(character, event) {
+function showEntityTooltip(character, event) {
   const tooltip = document.querySelector("#character-tooltip");
   tooltip.innerHTML = html`<strong>${esc(character.name)}</strong>
-    <span>${esc(character.role || "Figur")}</span>
+    <span
+      >${esc(
+        character.kind === "place"
+          ? `Ort · ${character.category || "Ort"}`
+          : character.role || "Figur",
+      )}</span
+    >
+    ${character.kind === "place"
+      ? html`<span
+          >${esc(
+            [character.continent, character.city].filter(Boolean).join(" · ") ||
+              placePath(character),
+          )}</span
+        >`
+      : ""}
     <p>
       ${esc(
         excerpt(
@@ -705,6 +862,7 @@ function render() {
   if (state.page === "home") page.innerHTML = renderHome();
   else if (state.page === "chapters") page.innerHTML = renderChapters();
   else if (state.page === "characters") page.innerHTML = renderCharacters();
+  else if (state.page === "places") page.innerHTML = renderPlaces();
   else if (state.page === "writing") page.innerHTML = renderWriting();
   else page.innerHTML = renderProgress();
   if (state.page === "chapters") {
@@ -747,6 +905,69 @@ function render() {
     search?.addEventListener("input", apply);
     filter?.addEventListener("change", apply);
   }
+  if (state.page === "places") {
+    const search = page.querySelector("#place-search");
+    const category = page.querySelector("#place-category-filter");
+    const continent = page.querySelector("#place-continent-filter");
+    const city = page.querySelector("#place-city-filter");
+    const region = page.querySelector("#place-region-filter");
+    const sort = page.querySelector("#place-sort");
+    const apply = () => {
+      const query = search.value.trim().toLocaleLowerCase("de-DE");
+      const visible = state.project.places
+        .filter((place) => {
+          const text = [
+            place.name,
+            ...(place.aliases || []),
+            place.category,
+            placeContinent(place),
+            placeRegion(place),
+            placeCity(place),
+            placePath(place),
+            place.description,
+            place.traits,
+          ]
+            .join(" ")
+            .toLocaleLowerCase("de-DE");
+          return (
+            (!query || text.includes(query)) &&
+            (category.value === "all" ||
+              (place.category || "Ort") === category.value) &&
+            (continent.value === "all" ||
+              placeContinent(place) === continent.value) &&
+            (city.value === "all" || placeCity(place) === city.value) &&
+            (region.value === "all" || placeRegion(place) === region.value)
+          );
+        })
+        .sort((a, b) => {
+          const key = sort.value;
+          const value = (place) =>
+            key === "category"
+              ? place.category
+              : key === "continent"
+                ? placeContinent(place)
+                : key === "city"
+                  ? placeCity(place)
+                  : key === "region"
+                    ? placeRegion(place)
+                    : key === "hierarchy"
+                      ? placePath(place)
+                      : place.name;
+          return value(a).localeCompare(value(b), "de", {
+            numeric: true,
+            sensitivity: "base",
+          });
+        });
+      page.querySelector("#place-grid").innerHTML = visible.length
+        ? visible.map(placeCard).join("")
+        : '<div class="quiet">Keine passenden Orte.</div>';
+    };
+    [search, category, continent, city, region].forEach((control) => {
+      control.addEventListener("input", apply);
+      control.addEventListener("change", apply);
+    });
+    sort.addEventListener("change", apply);
+  }
   const editor = page.querySelector("#editor-text");
   if (editor) {
     editor.value = currentChapter()?.body || "";
@@ -756,6 +977,7 @@ function render() {
       highlight.innerHTML = highlightedText(
         editor.value,
         state.project.characters,
+        state.project.places,
       );
       highlight.scrollTop = editor.scrollTop;
       highlight.scrollLeft = editor.scrollLeft;
@@ -768,10 +990,20 @@ function render() {
     highlight.addEventListener("pointerover", (event) => {
       const mention = event.target.closest(".character-mention");
       if (!mention) return;
-      const character = state.project.characters.find(
-        (item) => item.id === mention.dataset.characterId,
-      );
-      if (character) showCharacterTooltip(character, event);
+      const entities =
+        mention.dataset.action === "open-place"
+          ? state.project.places
+          : state.project.characters;
+      const entity = entities.find((item) => item.id === mention.dataset.id);
+      if (entity)
+        showEntityTooltip(
+          {
+            ...entity,
+            kind:
+              mention.dataset.action === "open-place" ? "place" : "character",
+          },
+          event,
+        );
     });
     highlight.addEventListener("pointermove", (event) => {
       if (event.target.closest(".character-mention")) {
@@ -799,6 +1031,7 @@ function render() {
     page.querySelector("#editor-highlight").innerHTML = highlightedText(
       editor.value,
       state.project.characters,
+      state.project.places,
     );
     const currentWords = wordCount(ch.body);
     page.querySelector("#word-count-live").textContent = format(currentWords);
@@ -1097,10 +1330,14 @@ function editCharacterForm(ch = {}) {
     async (data) => {
       const name = data.get("name").trim();
       if (
-        state.project.characters.some(
-          (item) =>
-            item.id !== ch.id &&
-            item.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase(),
+        [
+          ...state.project.characters
+            .filter((item) => item.id !== ch.id)
+            .map((item) => item.name),
+          ...state.project.places.map((item) => item.name),
+        ].some(
+          (otherName) =>
+            otherName.trim().toLocaleLowerCase() === name.toLocaleLowerCase(),
         )
       ) {
         toast("Es gibt bereits eine Figur mit diesem Namen.");
@@ -1108,10 +1345,10 @@ function editCharacterForm(ch = {}) {
       }
       const color = data.get("color").toLowerCase();
       if (
-        state.project.characters.some(
-          (item) =>
-            item.id !== ch.id && characterColor(item).toLowerCase() === color,
-        )
+        [
+          ...state.project.characters.filter((item) => item.id !== ch.id),
+          ...state.project.places,
+        ].some((item) => characterColor(item).toLowerCase() === color)
       ) {
         toast("Bitte wähle eine eigene Markierungsfarbe.");
         return false;
@@ -1258,6 +1495,239 @@ function openCharacter(ch) {
   });
 }
 
+function editPlaceForm(place = {}) {
+  const editing = !!place.id;
+  const candidates = [...state.project.places]
+    .filter((item) => item.id !== place.id)
+    .sort((a, b) => placePath(a).localeCompare(placePath(b), "de"));
+  openDialog(
+    editing ? "Ort bearbeiten" : "Neuer Ort",
+    html`<div class="form-grid">
+      <label class="field full"
+        >Name<input
+          name="name"
+          required
+          value="${esc(place.name || "")}"
+          placeholder="Name des Ortes" /></label
+      ><label class="field"
+        >Kategorie<select name="category">
+          ${[
+            "Kontinent",
+            "Land",
+            "Region",
+            "Stadt",
+            "Ort",
+            "Gebäude",
+            "Naturort",
+            "Sonstiges",
+          ]
+            .map(
+              (category) =>
+                html`<option
+                  ${(place.category || "Ort") === category ? "selected" : ""}
+                >
+                  ${category}
+                </option>`,
+            )
+            .join("")}
+        </select></label
+      ><label class="field"
+        >Markierungsfarbe<input
+          name="color"
+          type="color"
+          value="${characterColor(place)}" /></label
+      ><label class="field full"
+        >Übergeordneter Ort<select name="parent">
+          <option value="">Keiner</option>
+          ${candidates
+            .map(
+              (item) =>
+                html`<option
+                  value="${esc(item.id)}"
+                  ${place.parent === item.id ? "selected" : ""}
+                >
+                  ${esc(placePath(item))}
+                </option>`,
+            )
+            .join("")}
+        </select></label
+      ><label class="field"
+        >Kontinent<input
+          name="continent"
+          value="${esc(place.continent || "")}" /></label
+      ><label class="field"
+        >Region<input name="region" value="${esc(place.region || "")}" /></label
+      ><label class="field"
+        >Stadt<input name="city" value="${esc(place.city || "")}" /></label
+      ><label class="field full"
+        >Aliase, durch Kommas getrennt<input
+          name="aliases"
+          value="${esc((place.aliases || []).join(", "))}"
+          placeholder="Kurzname, frühere Namen" /></label
+      ><label class="field full"
+        >Beschreibung<textarea
+          name="description"
+          placeholder="Was sollte man über diesen Ort wissen?"
+        ></textarea></label
+      ><label class="field full"
+        >Notizen<textarea
+          name="traits"
+          placeholder="Merkmale, Atmosphäre …"
+        ></textarea>
+      </label>
+    </div>`,
+    async (data) => {
+      const name = data.get("name").trim();
+      const nameKey = name.toLocaleLowerCase("de-DE");
+      const allNames = [
+        ...state.project.characters.map((item) => ({
+          ...item,
+          entityType: "character",
+        })),
+        ...state.project.places.map((item) => ({
+          ...item,
+          entityType: "place",
+        })),
+      ];
+      if (
+        allNames.some(
+          (item) =>
+            (item.entityType !== "place" || item.id !== place.id) &&
+            item.name.trim().toLocaleLowerCase("de-DE") === nameKey,
+        )
+      ) {
+        toast("Dieser Name wird bereits verwendet.");
+        return false;
+      }
+      const color = data.get("color").toLowerCase();
+      if (
+        allNames.some(
+          (item) =>
+            (item.entityType !== "place" || item.id !== place.id) &&
+            characterColor(item).toLowerCase() === color,
+        )
+      ) {
+        toast("Bitte wähle eine eigene Markierungsfarbe.");
+        return false;
+      }
+      const parent = data.get("parent");
+      if (place.id && parent) {
+        let current = state.project.places.find((item) => item.id === parent);
+        const seen = new Set();
+        while (current && !seen.has(current.id)) {
+          if (current.id === place.id) {
+            toast("Ein Ort kann nicht unter einem seiner Unterorte liegen.");
+            return false;
+          }
+          seen.add(current.id);
+          current = state.project.places.find(
+            (item) => item.id === current.parent,
+          );
+        }
+      }
+      let id = place.id || slug(name);
+      let suffix = 2;
+      while (!editing && state.project.places.some((item) => item.id === id))
+        id = `${slug(name)}-${suffix++}`;
+      try {
+        await api.savePlace({
+          id,
+          name,
+          category: data.get("category"),
+          continent: data.get("continent"),
+          region: data.get("region"),
+          city: data.get("city"),
+          parent,
+          aliases: data.get("aliases"),
+          description: data.get("description"),
+          traits: data.get("traits"),
+          color,
+        });
+      } catch (error) {
+        toast(`Ort konnte nicht gespeichert werden: ${error.message || error}`);
+        return false;
+      }
+      state.project = await api.currentProject();
+      dialog.close();
+      toast(editing ? "Ort gespeichert." : "Ort erstellt.");
+      render();
+    },
+    editing ? "Änderungen speichern" : "Ort anlegen",
+  );
+  dialog.querySelector('[name="description"]').value = place.description || "";
+  dialog.querySelector('[name="traits"]').value = place.traits || "";
+}
+
+function openPlace(place) {
+  const parent = state.project.places.find((item) => item.id === place.parent);
+  const children = state.project.places.filter(
+    (item) => item.parent === place.id,
+  );
+  openDialog(
+    place.name,
+    html`<div class="place-detail">
+      <span class="role-chip">${esc(place.category || "Ort")}</span>
+      <div class="place-path">${esc(placePath(place))}</div>
+      <div class="place-facts">
+        <span
+          >Übergeordnet:
+          ${parent
+            ? html`<button
+                class="button small"
+                data-action="open-place"
+                data-id="${esc(parent.id)}"
+              >
+                ${esc(parent.name)}
+              </button>`
+            : "—"}</span
+        >
+        <span>Kontinent: ${esc(placeContinent(place) || "—")}</span>
+        <span>Region: ${esc(placeRegion(place) || "—")}</span>
+        <span>Stadt: ${esc(placeCity(place) || "—")}</span>
+        <span>Aliase: ${esc((place.aliases || []).join(", ") || "—")}</span>
+      </div>
+      <p class="detail-copy">
+        ${esc(place.description || "Noch keine Beschreibung.")}
+      </p>
+      <h3>Orte darunter</h3>
+      <div class="place-children">
+        ${children.length
+          ? children
+              .map(
+                (child) =>
+                  html`<button
+                    class="button small"
+                    data-action="open-place"
+                    data-id="${esc(child.id)}"
+                  >
+                    ${esc(child.name)}
+                  </button>`,
+              )
+              .join("")
+          : '<span class="small-note">Noch keine Unterorte verknüpft.</span>'}
+      </div>
+      <h3>Notizen</h3>
+      <div class="detail-copy">${esc(place.traits || "Keine Notizen.")}</div>
+    </div>`,
+    async () => {
+      dialog.close();
+      setTimeout(() => editPlaceForm(place), 0);
+    },
+    "Bearbeiten",
+  );
+  dialog.querySelector("[data-cancel]").textContent = "Schließen";
+  dialog.querySelector(".dialog-actions").firstElementChild.innerHTML =
+    '<button type="button" class="button subtle" data-delete>Ort löschen</button>';
+  dialog.querySelector("[data-delete]").addEventListener("click", async () => {
+    if (!confirm(`Ort „${place.name}“ löschen?`)) return;
+    await api.deletePlace(place.id);
+    state.project = await api.currentProject();
+    dialog.close();
+    render();
+    toast("Ort gelöscht.");
+  });
+}
+
 function openRelationshipMap() {
   const characters = state.project.characters;
   const relations = [];
@@ -1350,6 +1820,7 @@ document.addEventListener("click", async (event) => {
   else if (action === "open-project") void openProject();
   else if (action === "new-chapter") createChapter();
   else if (action === "new-character") editCharacterForm();
+  else if (action === "new-place") editPlaceForm();
   else if (action === "write-chapter") {
     void saveCurrentChapter();
     state.activeChapter = button.dataset.id;
@@ -1359,6 +1830,11 @@ document.addEventListener("click", async (event) => {
       (item) => item.id === button.dataset.id,
     );
     if (ch) openCharacter(ch);
+  } else if (action === "open-place") {
+    const place = state.project.places.find(
+      (item) => item.id === button.dataset.id,
+    );
+    if (place) openPlace(place);
   } else if (action === "relationship-info") openRelationshipMap();
   else if (action === "save-now") {
     await saveCurrentChapter();
