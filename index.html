@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Mycel</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app" class="app-shell">
+      <header class="topbar">
+        <button class="brand" data-page="home" aria-label="Mycel Übersicht">
+          <span>Mycel</span>
+        </button>
+        <nav class="primary-nav" aria-label="Hauptnavigation">
+          <button data-page="home"><span>⌂</span> Übersicht</button>
+          <button data-page="chapters"><span>▤</span> Kapitel</button>
+          <button data-page="characters"><span>♧</span> Figuren</button>
+          <button data-page="writing"><span>✎</span> Schreiben</button>
+          <button data-page="progress"><span>⌁</span> Fortschritt</button>
+        </nav>
+        <div class="top-actions">
+          <span id="project-pill" class="project-pill"
+            >Kein Projekt geöffnet</span
+          ><button
+            id="open-project"
+            class="icon-button"
+            title="Projektordner öffnen"
+            aria-label="Projektordner öffnen"
+          >
+            ↗</button
+          ><button id="new-project" class="avatar-button" title="Neues Projekt">
+            ＋
+          </button>
+        </div>
+      </header>
+
+      <main id="page" class="page"></main>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+      <dialog id="dialog" class="dialog"></dialog>
+    </div>
+    <script src="renderer.js"></script>
+  </body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "mycel",
+  "productName": "Mycel",
+  "version": "0.1.0",
+  "description": "A calm, local-first writing studio for novels.",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "format": "prettier --write main.cjs preload.cjs renderer.js index.html styles.css"
+  },
+  "devDependencies": {
+    "electron": "44.6.0",
+    "prettier": "^3.6.2"
+  }
+}
