@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld("mycel", {
   savePlace: (place) => ipcRenderer.invoke("place:save", place),
   choosePlaceImage: () => ipcRenderer.invoke("place:choose-image"),
   deletePlace: (id) => ipcRenderer.invoke("place:delete", id),
+  saveKnowledge: (entry) => ipcRenderer.invoke("knowledge:save", entry),
+  deleteKnowledge: (id) => ipcRenderer.invoke("knowledge:delete", id),
   saveSettings: (settings) => ipcRenderer.invoke("project:settings", settings),
   saveSession: (entry) => ipcRenderer.invoke("project:session", entry),
 });

@@ -11,6 +11,7 @@ const state = {
 };
 const page = document.querySelector("#page");
 const dialog = document.querySelector("#dialog");
+const searchDialog = document.querySelector("#search-dialog");
 const toastEl = document.querySelector("#toast");
 
 function html(strings, ...values) {
@@ -50,6 +51,7 @@ const characterColor = (
   characters = [
     ...(state.project?.characters || []),
     ...(state.project?.places || []),
+    ...(state.project?.knowledge || []),
   ],
 ) => {
   if (/^#[0-9a-f]{6}$/i.test(character.color || "")) return character.color;
@@ -168,31 +170,35 @@ function renderWelcome() {
       ? html`<section class="welcome-recent">
           <h2>Zuletzt geöffnet</h2>
           <div class="welcome-project-list">
-            ${state.recentProjects.slice(0, 4)
+            ${state.recentProjects
+              .slice(0, 4)
               .map(
-                (project) => html`<div class="welcome-project-row">
-                  <button
-                    class="welcome-project"
-                    data-action="open-recent-project"
-                    data-root="${esc(project.root)}"
-                  >
-                    <span class="welcome-project-icon">↗</span>
-                    <span class="welcome-project-copy">
-                      <strong>${esc(project.name)}</strong>
-                      <small>${esc(project.root)}</small>
-                    </span>
-                    <span class="welcome-project-arrow">›</span>
-                  </button>
-                  <button
-                    class="welcome-project-remove"
-                    data-action="remove-recent-project"
-                    data-root="${esc(project.root)}"
-                    aria-label="${esc(project.name)} aus Zuletzt geöffnet entfernen"
-                    title="Aus der Liste entfernen"
-                  >
-                    ×
-                  </button>
-                </div>`,
+                (project) =>
+                  html`<div class="welcome-project-row">
+                    <button
+                      class="welcome-project"
+                      data-action="open-recent-project"
+                      data-root="${esc(project.root)}"
+                    >
+                      <span class="welcome-project-icon">↗</span>
+                      <span class="welcome-project-copy">
+                        <strong>${esc(project.name)}</strong>
+                        <small>${esc(project.root)}</small>
+                      </span>
+                      <span class="welcome-project-arrow">›</span>
+                    </button>
+                    <button
+                      class="welcome-project-remove"
+                      data-action="remove-recent-project"
+                      data-root="${esc(project.root)}"
+                      aria-label="${esc(
+                        project.name,
+                      )} aus Zuletzt geöffnet entfernen"
+                      title="Aus der Liste entfernen"
+                    >
+                      ×
+                    </button>
+                  </div>`,
               )
               .join("")}
           </div>
@@ -623,6 +629,75 @@ function renderPlaces() {
     </div>`;
 }
 
+function knowledgeCard(entry) {
+  return html`<article
+    class="knowledge-card"
+    data-action="open-knowledge"
+    data-id="${esc(entry.id)}"
+  >
+    <div class="knowledge-card-top">
+      <span class="role-chip">${esc(entry.category || "Allgemein")}</span>
+      <i style="--character-highlight: ${characterColor(entry)}"></i>
+    </div>
+    <h3>${esc(entry.name)}</h3>
+    ${(entry.aliases || []).length
+      ? html`<small class="knowledge-aliases"
+          >${esc(entry.aliases.join(" · "))}</small
+        >`
+      : ""}
+    <p>${esc(entry.description || "Noch keine Beschreibung.")}</p>
+    ${entry.relationships?.length
+      ? html`<small class="knowledge-relations"
+          >${entry.relationships.length} Verknüpfungen</small
+        >`
+      : ""}
+  </article>`;
+}
+
+function renderKnowledge() {
+  const entries = state.project.knowledge || [];
+  const categories = [...new Set(entries.map((entry) => entry.category))].sort(
+    (a, b) => a.localeCompare(b, "de", { sensitivity: "base" }),
+  );
+  return html`${heading(
+      "Wissen",
+      html`<button class="button primary" data-action="new-knowledge">
+        ＋ Eintrag
+      </button>`,
+    )}
+    <div class="knowledge-tools">
+      <input
+        class="search"
+        id="knowledge-search"
+        placeholder="Wissen durchsuchen …"
+      />
+      <select class="select-like" id="knowledge-category-filter">
+        <option value="all">Alle Kategorien</option>
+        ${categories
+          .map(
+            (category) =>
+              html`<option value="${esc(category)}">${esc(category)}</option>`,
+          )
+          .join("")}
+      </select>
+      <select class="select-like" id="knowledge-sort">
+        <option value="name">Sortieren: Name</option>
+        <option value="category">Kategorie</option>
+      </select>
+      <span class="knowledge-count">${entries.length} Einträge</span>
+    </div>
+    <div class="grid" id="knowledge-grid">
+      ${entries.length
+        ? entries.map(knowledgeCard).join("")
+        : emptyState(
+            "Noch kein Wissen angelegt",
+            "Sammle hier alles, wofür es noch keine eigene Rubrik gibt.",
+            "Eintrag erstellen",
+            "new-knowledge",
+          )}
+    </div>`;
+}
+
 function renderWriting() {
   const chapters = state.project.chapters;
   if (!state.activeChapter && chapters.length)
@@ -811,11 +886,12 @@ function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function characterMatchData(characters, places) {
+function characterMatchData(characters, places, knowledge = []) {
   const matches = new Map();
   [
     ...characters.map((character) => ({ ...character, kind: "character" })),
     ...places.map((place) => ({ ...place, kind: "place" })),
+    ...knowledge.map((entry) => ({ ...entry, kind: "knowledge" })),
   ].forEach((entity) => {
     [entity.name, ...(entity.aliases || [])]
       .map((name) => String(name || "").trim())
@@ -828,8 +904,8 @@ function characterMatchData(characters, places) {
   return [...matches.values()].sort((a, b) => b.name.length - a.name.length);
 }
 
-function highlightedText(text, characters, places) {
-  const matches = characterMatchData(characters, places);
+function highlightedText(text, characters, places, knowledge = []) {
+  const matches = characterMatchData(characters, places, knowledge);
   if (!matches.length) return esc(text);
   const expression = new RegExp(
     `(?<![\\p{L}\\p{N}_])(?:${matches
@@ -858,30 +934,30 @@ function highlightedText(text, characters, places) {
   return output + esc(text.slice(previous));
 }
 
-function showEntityTooltip(character, event) {
+function showEntityTooltip(entity, event) {
   const tooltip = document.querySelector("#character-tooltip");
-  tooltip.innerHTML = html`<strong>${esc(character.name)}</strong>
+  tooltip.innerHTML = html`<strong>${esc(entity.name)}</strong>
     <span
       >${esc(
-        character.kind === "place"
-          ? `Ort · ${character.category || "Ort"}`
-          : character.role || "Figur",
+        entity.kind === "place"
+          ? `Ort · ${entity.category || "Ort"}`
+          : entity.kind === "knowledge"
+            ? `Wissen · ${entity.category || "Allgemein"}`
+            : entity.role || "Figur",
       )}</span
     >
-    ${character.kind === "place"
+    ${entity.kind === "place"
       ? html`<span
           >${esc(
-            [character.continent, character.city].filter(Boolean).join(" · ") ||
-              placePath(character),
+            [entity.continent, entity.city].filter(Boolean).join(" · ") ||
+              placePath(entity),
           )}</span
         >`
       : ""}
     <p>
       ${esc(
         excerpt(
-          character.description ||
-            character.traits ||
-            "Noch keine Beschreibung.",
+          entity.description || entity.traits || "Noch keine Beschreibung.",
           120,
         ),
       )}
@@ -903,6 +979,7 @@ function render() {
   else if (state.page === "chapters") page.innerHTML = renderChapters();
   else if (state.page === "characters") page.innerHTML = renderCharacters();
   else if (state.page === "places") page.innerHTML = renderPlaces();
+  else if (state.page === "knowledge") page.innerHTML = renderKnowledge();
   else if (state.page === "writing") page.innerHTML = renderWriting();
   else page.innerHTML = renderProgress();
   if (state.page === "chapters") {
@@ -1008,6 +1085,44 @@ function render() {
     });
     sort.addEventListener("change", apply);
   }
+  if (state.page === "knowledge") {
+    const search = page.querySelector("#knowledge-search");
+    const category = page.querySelector("#knowledge-category-filter");
+    const sort = page.querySelector("#knowledge-sort");
+    const apply = () => {
+      const query = search.value.trim().toLocaleLowerCase("de-DE");
+      const visible = state.project.knowledge
+        .filter((entry) => {
+          const text = [
+            entry.name,
+            entry.category,
+            ...(entry.aliases || []),
+            entry.description,
+            entry.traits,
+          ]
+            .join(" ")
+            .toLocaleLowerCase("de-DE");
+          return (
+            (!query || text.includes(query)) &&
+            (category.value === "all" || entry.category === category.value)
+          );
+        })
+        .sort((a, b) => {
+          const first = sort.value === "category" ? a.category : a.name;
+          const second = sort.value === "category" ? b.category : b.name;
+          return first.localeCompare(second, "de", {
+            numeric: true,
+            sensitivity: "base",
+          });
+        });
+      page.querySelector("#knowledge-grid").innerHTML = visible.length
+        ? visible.map(knowledgeCard).join("")
+        : '<div class="quiet">Keine passenden Einträge.</div>';
+    };
+    search.addEventListener("input", apply);
+    category.addEventListener("change", apply);
+    sort.addEventListener("change", apply);
+  }
   const editor = page.querySelector("#editor-text");
   if (editor) {
     editor.value = currentChapter()?.body || "";
@@ -1018,6 +1133,7 @@ function render() {
         editor.value,
         state.project.characters,
         state.project.places,
+        state.project.knowledge,
       );
       highlight.scrollTop = editor.scrollTop;
       highlight.scrollLeft = editor.scrollLeft;
@@ -1033,14 +1149,15 @@ function render() {
       const entities =
         mention.dataset.action === "open-place"
           ? state.project.places
-          : state.project.characters;
+          : mention.dataset.action === "open-knowledge"
+            ? state.project.knowledge
+            : state.project.characters;
       const entity = entities.find((item) => item.id === mention.dataset.id);
       if (entity)
         showEntityTooltip(
           {
             ...entity,
-            kind:
-              mention.dataset.action === "open-place" ? "place" : "character",
+            kind: mention.dataset.action.replace("open-", ""),
           },
           event,
         );
@@ -1072,6 +1189,7 @@ function render() {
       editor.value,
       state.project.characters,
       state.project.places,
+      state.project.knowledge,
     );
     const currentWords = wordCount(ch.body);
     page.querySelector("#word-count-live").textContent = format(currentWords);
@@ -1375,6 +1493,7 @@ function editCharacterForm(ch = {}) {
             .filter((item) => item.id !== ch.id)
             .map((item) => item.name),
           ...state.project.places.map((item) => item.name),
+          ...state.project.knowledge.map((item) => item.name),
         ].some(
           (otherName) =>
             otherName.trim().toLocaleLowerCase() === name.toLocaleLowerCase(),
@@ -1388,6 +1507,7 @@ function editCharacterForm(ch = {}) {
         [
           ...state.project.characters.filter((item) => item.id !== ch.id),
           ...state.project.places,
+          ...state.project.knowledge,
         ].some((item) => characterColor(item).toLowerCase() === color)
       ) {
         toast("Bitte wähle eine eigene Markierungsfarbe.");
@@ -1519,6 +1639,7 @@ function openCharacter(ch) {
     },
     "Bearbeiten",
   );
+  dialog.classList.add("entity-dialog");
   dialog.querySelector("[data-cancel]").textContent = "Schließen";
   dialog.querySelector(".dialog-actions").firstElementChild.innerHTML =
     '<button type="button" class="button subtle" data-delete>Figur löschen</button>';
@@ -1603,19 +1724,16 @@ function editPlaceForm(place = {}) {
         >Aliase, durch Kommas getrennt<input
           name="aliases"
           value="${esc((place.aliases || []).join(", "))}"
-          placeholder="Kurzname, frühere Namen" /></label
-      ><div class="field full">
+          placeholder="Kurzname, frühere Namen"
+      /></label>
+      <div class="field full">
         <label>Titelbild</label>
         <div class="place-image-preview" data-place-image-preview>
           ${place.image
             ? html`<img src="${esc(place.image)}" alt="" />`
             : html`<span>Kein Bild ausgewählt</span>`}
         </div>
-        <input
-          type="hidden"
-          name="image"
-          value="${esc(place.image || "")}"
-        />
+        <input type="hidden" name="image" value="${esc(place.image || "")}" />
         <div class="place-image-actions">
           <button type="button" class="button small" data-place-image>
             Bild auswählen …
@@ -1628,8 +1746,8 @@ function editPlaceForm(place = {}) {
             Bild entfernen
           </button>
         </div>
-      </div
-      ><label class="field full"
+      </div>
+      <label class="field full"
         >Beschreibung<textarea
           name="description"
           placeholder="Was sollte man über diesen Ort wissen?"
@@ -1652,6 +1770,10 @@ function editPlaceForm(place = {}) {
         ...state.project.places.map((item) => ({
           ...item,
           entityType: "place",
+        })),
+        ...state.project.knowledge.map((item) => ({
+          ...item,
+          entityType: "knowledge",
         })),
       ];
       if (
@@ -1802,6 +1924,7 @@ function openPlace(place) {
     },
     "Bearbeiten",
   );
+  dialog.classList.add("entity-dialog");
   dialog.querySelector("[data-cancel]").textContent = "Schließen";
   dialog.querySelector(".dialog-actions").firstElementChild.innerHTML =
     '<button type="button" class="button subtle" data-delete>Ort löschen</button>';
@@ -1813,6 +1936,340 @@ function openPlace(place) {
     render();
     toast("Ort gelöscht.");
   });
+}
+
+function knowledgeTargets(excludeId = "") {
+  return [
+    ...state.project.characters.map((item) => ({
+      ...item,
+      targetKind: "character",
+    })),
+    ...state.project.places.map((item) => ({ ...item, targetKind: "place" })),
+    ...state.project.knowledge
+      .filter((item) => item.id !== excludeId)
+      .map((item) => ({ ...item, targetKind: "knowledge" })),
+  ].sort((a, b) => a.name.localeCompare(b.name, "de"));
+}
+
+function knowledgeRelationshipRow(relation, targets) {
+  const value = relation.targetKind
+    ? `${relation.targetKind}:${relation.target}`
+    : "";
+  return html`<div class="relation-row">
+    <select name="relationTarget">
+      <option value="">Eintrag auswählen</option>
+      ${targets
+        .map(
+          (target) =>
+            html`<option
+              value="${esc(`${target.targetKind}:${target.id}`)}"
+              ${value === `${target.targetKind}:${target.id}` ? "selected" : ""}
+            >
+              ${target.targetKind === "character"
+                ? "Figur"
+                : target.targetKind === "place"
+                  ? "Ort"
+                  : "Wissen"}
+              · ${esc(target.name)}
+            </option>`,
+        )
+        .join("")}
+    </select>
+    <input
+      name="relationType"
+      value="${esc(relation.type || "")}"
+      placeholder="Verknüpfung"
+    />
+    <button
+      type="button"
+      class="button small"
+      data-remove-relation
+      aria-label="Verknüpfung entfernen"
+    >
+      ×
+    </button>
+  </div>`;
+}
+
+function editKnowledgeForm(entry = {}) {
+  const editing = !!entry.id;
+  const targets = knowledgeTargets(entry.id);
+  const categories = [
+    "Allgemein",
+    "Rasse",
+    "Religion",
+    "Magie",
+    "Orden",
+    "Gegenstand",
+    "Sprache",
+    ...state.project.knowledge.map((item) => item.category),
+  ];
+  const relationRows = (entry.relationships || [])
+    .map((relation) => knowledgeRelationshipRow(relation, targets))
+    .join("");
+  openDialog(
+    editing ? "Wissen bearbeiten" : "Wissen anlegen",
+    html`<div class="form-grid">
+      <label class="field full"
+        >Name<input
+          name="name"
+          required
+          value="${esc(entry.name || "")}"
+          placeholder="Name des Eintrags" /></label
+      ><label class="field"
+        >Kategorie<input
+          name="category"
+          list="knowledge-category-options"
+          value="${esc(entry.category || "Allgemein")}"
+          placeholder="Eigene Kategorie"
+        />
+        <datalist id="knowledge-category-options">
+          ${[...new Set(categories)]
+            .map((category) => html`<option value="${esc(category)}"></option>`)
+            .join("")}
+        </datalist></label
+      ><label class="field"
+        >Markierungsfarbe<input
+          name="color"
+          type="color"
+          value="${characterColor(entry)}" /></label
+      ><label class="field full"
+        >Aliase, durch Kommas getrennt<input
+          name="aliases"
+          value="${esc((entry.aliases || []).join(", "))}"
+          placeholder="Andere Namen und Schreibweisen" /></label
+      ><label class="field full"
+        >Beschreibung<textarea
+          name="description"
+          placeholder="Was soll im Text erkannt und verknüpft werden?"
+        ></textarea></label
+      ><label class="field full"
+        >Eigenschaften und Notizen<textarea
+          name="traits"
+          placeholder="Hintergrund, Merkmale, Zusammenhänge …"
+        ></textarea>
+      </label>
+      <div class="field full">
+        <label>Verknüpfungen</label>
+        <div class="relation-list">${relationRows}</div>
+        <button type="button" class="button small" data-add-knowledge-relation>
+          ＋ Verknüpfung hinzufügen
+        </button>
+      </div>
+    </div>`,
+    async (data) => {
+      const name = data.get("name").trim();
+      const nameKey = name.toLocaleLowerCase("de-DE");
+      const allEntries = [
+        ...state.project.characters,
+        ...state.project.places,
+        ...state.project.knowledge.filter((item) => item.id !== entry.id),
+      ];
+      if (
+        allEntries.some(
+          (item) => item.name.trim().toLocaleLowerCase("de-DE") === nameKey,
+        )
+      ) {
+        toast("Dieser Name wird bereits verwendet.");
+        return false;
+      }
+      const color = data.get("color").toLowerCase();
+      if (
+        allEntries.some((item) => characterColor(item).toLowerCase() === color)
+      ) {
+        toast("Bitte wähle eine eigene Markierungsfarbe.");
+        return false;
+      }
+      let id = entry.id || slug(name);
+      let suffix = 2;
+      while (!editing && state.project.knowledge.some((item) => item.id === id))
+        id = `${slug(name)}-${suffix++}`;
+      const targets = data.getAll("relationTarget");
+      const types = data.getAll("relationType");
+      const relationships = targets
+        .map((target, index) => {
+          const [targetKind, ...targetId] = String(target).split(":");
+          return {
+            targetKind,
+            target: targetId.join(":"),
+            type: String(types[index] || "").trim(),
+          };
+        })
+        .filter((relation) => relation.target && relation.type);
+      try {
+        await api.saveKnowledge({
+          id,
+          name,
+          category: data.get("category").trim() || "Allgemein",
+          aliases: data.get("aliases"),
+          description: data.get("description"),
+          traits: data.get("traits"),
+          color,
+          relationships,
+        });
+      } catch (error) {
+        toast(
+          `Wissen konnte nicht gespeichert werden: ${error.message || error}`,
+        );
+        return false;
+      }
+      state.project = await api.currentProject();
+      dialog.close();
+      render();
+      toast(editing ? "Eintrag gespeichert." : "Eintrag erstellt.");
+    },
+    editing ? "Änderungen speichern" : "Eintrag anlegen",
+  );
+  dialog.querySelector('[name="description"]').value = entry.description || "";
+  dialog.querySelector('[name="traits"]').value = entry.traits || "";
+  const relationList = dialog.querySelector(".relation-list");
+  dialog
+    .querySelector("[data-add-knowledge-relation]")
+    .addEventListener("click", () => {
+      relationList.insertAdjacentHTML(
+        "beforeend",
+        knowledgeRelationshipRow({}, targets),
+      );
+    });
+  relationList.addEventListener("click", (event) => {
+    const remove = event.target.closest("[data-remove-relation]");
+    if (remove) remove.closest(".relation-row").remove();
+  });
+}
+
+function openKnowledge(entry) {
+  const relationshipCards = (entry.relationships || [])
+    .map((relation) => {
+      const collection = {
+        character: state.project.characters,
+        place: state.project.places,
+        knowledge: state.project.knowledge,
+      }[relation.targetKind];
+      const target = collection?.find((item) => item.id === relation.target);
+      if (!target) return "";
+      return html`<button
+        type="button"
+        class="knowledge-related"
+        data-action="open-${esc(relation.targetKind)}"
+        data-id="${esc(target.id)}"
+      >
+        <span>${esc(relation.type)}</span><strong>${esc(target.name)}</strong>
+      </button>`;
+    })
+    .join("");
+  openDialog(
+    entry.name,
+    html`<div class="knowledge-detail">
+      <span class="role-chip">${esc(entry.category || "Allgemein")}</span>
+      <p>${esc(entry.description || "Noch keine Beschreibung.")}</p>
+      <div>
+        <h3>Aliase</h3>
+        <p>${esc((entry.aliases || []).join(", ") || "Keine Aliase.")}</p>
+      </div>
+      <div>
+        <h3>Eigenschaften und Notizen</h3>
+        <p>${esc(entry.traits || "Keine Notizen.")}</p>
+      </div>
+      <div>
+        <h3>Verknüpfungen</h3>
+        <div class="knowledge-related-list">
+          ${relationshipCards ||
+          '<span class="small-note">Keine Verknüpfungen.</span>'}
+        </div>
+      </div>
+    </div>`,
+    async () => {
+      dialog.close();
+      setTimeout(() => editKnowledgeForm(entry), 0);
+    },
+    "Bearbeiten",
+  );
+  dialog.classList.add("entity-dialog");
+  dialog.querySelector("[data-cancel]").textContent = "Schließen";
+  dialog.querySelector(".dialog-actions").firstElementChild.innerHTML =
+    '<button type="button" class="button subtle" data-delete>Eintrag löschen</button>';
+  dialog.querySelector("[data-delete]").addEventListener("click", async () => {
+    if (!confirm(`Eintrag „${entry.name}“ löschen?`)) return;
+    await api.deleteKnowledge(entry.id);
+    state.project = await api.currentProject();
+    dialog.close();
+    render();
+    toast("Eintrag gelöscht.");
+  });
+}
+
+function openEntity(kind, id, fromDialog = false) {
+  const open = () => {
+    const entity = {
+      character: state.project.characters,
+      place: state.project.places,
+      knowledge: state.project.knowledge,
+    }[kind]?.find((item) => item.id === id);
+    if (!entity) return;
+    if (kind === "character") openCharacter(entity);
+    else if (kind === "place") openPlace(entity);
+    else openKnowledge(entity);
+  };
+  if (fromDialog) {
+    dialog.close();
+    setTimeout(open, 0);
+  } else {
+    open();
+  }
+}
+
+function projectSearchResults(query) {
+  const normalized = query.trim().toLocaleLowerCase("de-DE");
+  if (!normalized || !state.project) return [];
+  const results = [];
+  const add = (kind, id, title, body, detail = "") => {
+    const text = `${title} ${body} ${detail}`;
+    const index = text.toLocaleLowerCase("de-DE").indexOf(normalized);
+    if (index < 0) return;
+    const excerptStart = Math.max(0, index - 55);
+    const excerptText = text.slice(excerptStart, index + normalized.length + 90);
+    results.push({ kind, id, title, detail, excerpt: excerpt(excerptText, 150) });
+  };
+  for (const chapter of state.project.chapters) {
+    add("chapter", chapter.id, chapter.title || "Kapitel", chapter.body || "", chapter.volume || "Band 1");
+  }
+  for (const character of state.project.characters) {
+    add("character", character.id, character.name, `${character.description || ""} ${character.traits || ""} ${(character.aliases || []).join(" ")}`, character.role || "Figur");
+  }
+  for (const place of state.project.places) {
+    add("place", place.id, place.name, `${place.description || ""} ${(place.aliases || []).join(" ")}`, [place.category, place.continent, place.city].filter(Boolean).join(" · ") || "Ort");
+  }
+  for (const entry of state.project.knowledge) {
+    add("knowledge", entry.id, entry.name, `${entry.description || ""} ${entry.traits || ""} ${(entry.aliases || []).join(" ")}`, entry.category || "Wissen");
+  }
+  return results.slice(0, 80);
+}
+
+function renderProjectSearch(query) {
+  const resultsElement = document.querySelector("#project-search-results");
+  if (!query.trim()) {
+    resultsElement.innerHTML = '<div class="project-search-empty">Suche in Kapiteln, Figuren, Orten und Wissen.</div>';
+    return;
+  }
+  const results = projectSearchResults(query);
+  resultsElement.innerHTML = results.length
+    ? results.map((result) => html`<button class="project-search-result" data-search-kind="${result.kind}" data-id="${esc(result.id)}">
+        <span class="project-search-result-icon">${{ chapter: "▤", character: "♧", place: "⌖", knowledge: "◇" }[result.kind]}</span>
+        <span class="project-search-result-copy"><strong>${esc(result.title)}</strong><small>${esc(result.detail)} · ${esc({ chapter: "Kapitel", character: "Figur", place: "Ort", knowledge: "Wissen" }[result.kind])}</small><span>${esc(result.excerpt)}</span></span>
+      </button>`).join("")
+    : '<div class="project-search-empty">Keine passenden Treffer gefunden.</div>';
+}
+
+function openSearchResult(kind, id) {
+  searchDialog.close();
+  if (kind === "chapter") {
+    void saveCurrentChapter();
+    state.activeChapter = id;
+    setPage("writing");
+    return;
+  }
+  setPage(({ character: "characters", place: "places", knowledge: "knowledge" })[kind]);
+  openEntity(kind, id);
 }
 
 function openRelationshipMap() {
@@ -1903,6 +2360,11 @@ async function removeRecentProject(root) {
 }
 
 document.addEventListener("click", async (event) => {
+  const searchResult = event.target.closest("[data-search-kind]");
+  if (searchResult) {
+    openSearchResult(searchResult.dataset.searchKind, searchResult.dataset.id);
+    return;
+  }
   const pageButton = event.target.closest("[data-page]");
   if (pageButton) {
     setPage(pageButton.dataset.page);
@@ -1932,20 +2394,19 @@ document.addEventListener("click", async (event) => {
   else if (action === "new-chapter") createChapter();
   else if (action === "new-character") editCharacterForm();
   else if (action === "new-place") editPlaceForm();
+  else if (action === "new-knowledge") editKnowledgeForm();
   else if (action === "write-chapter") {
     void saveCurrentChapter();
     state.activeChapter = button.dataset.id;
     setPage("writing");
-  } else if (action === "open-character") {
-    const ch = state.project.characters.find(
-      (item) => item.id === button.dataset.id,
+  } else if (
+    ["open-character", "open-place", "open-knowledge"].includes(action)
+  ) {
+    openEntity(
+      action.replace("open-", ""),
+      button.dataset.id,
+      dialog.open && dialog.contains(button),
     );
-    if (ch) openCharacter(ch);
-  } else if (action === "open-place") {
-    const place = state.project.places.find(
-      (item) => item.id === button.dataset.id,
-    );
-    if (place) openPlace(place);
   } else if (action === "relationship-info") openRelationshipMap();
   else if (action === "save-now") {
     await saveCurrentChapter();
@@ -1956,6 +2417,33 @@ document.addEventListener("click", async (event) => {
     });
     render();
     toast("Manuskriptziel gespeichert.");
+  }
+});
+
+document.querySelector("#project-search-open").addEventListener("click", () => {
+  if (!state.project) {
+    toast("Öffne zuerst ein Projekt.");
+    return;
+  }
+  searchDialog.showModal();
+  const input = document.querySelector("#project-search-input");
+  input.value = "";
+  renderProjectSearch("");
+  input.focus();
+});
+document.querySelector("#project-search-input").addEventListener("input", (event) => {
+  renderProjectSearch(event.currentTarget.value);
+});
+document.querySelector("#project-search-input").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    const first = document.querySelector(".project-search-result");
+    if (first) openSearchResult(first.dataset.searchKind, first.dataset.id);
+  }
+});
+document.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    document.querySelector("#project-search-open").click();
   }
 });
 

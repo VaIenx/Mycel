@@ -99,17 +99,21 @@ async function readProject() {
   const chaptersDir = insideProject("Chapters");
   const charactersDir = insideProject("Characters");
   const placesDir = insideProject("Places");
+  const knowledgeDir = insideProject("Knowledge");
   await fs.mkdir(chaptersDir, { recursive: true });
   await fs.mkdir(charactersDir, { recursive: true });
   await fs.mkdir(placesDir, { recursive: true });
+  await fs.mkdir(knowledgeDir, { recursive: true });
   await fs.mkdir(insideProject(".mycel"), { recursive: true });
   const chapters = [];
   const characters = [];
   const places = [];
+  const knowledge = [];
   for (const [folder, into, kind] of [
     ["Chapters", chapters, "chapter"],
     ["Characters", characters, "character"],
     ["Places", places, "place"],
+    ["Knowledge", knowledge, "knowledge"],
   ]) {
     const files = (
       await fs.readdir(insideProject(folder), { withFileTypes: true })
@@ -131,7 +135,8 @@ async function readProject() {
         (_link, target, display) =>
           display || path.basename(target).replace(/\.md$/i, ""),
       );
-      const record = { ...((metadata[kind + "s"] || {})[id] || {}) };
+      const collection = kind === "knowledge" ? "knowledge" : kind + "s";
+      const record = { ...((metadata[collection] || {})[id] || {}) };
       if (kind === "character") {
         const frontmatter = body.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
         if (frontmatter) {
@@ -215,6 +220,42 @@ async function readProject() {
             insideProject(...String(record.image).split("/")),
           ).href;
       }
+      if (kind === "knowledge") {
+        const frontmatter = body.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+        if (frontmatter) {
+          const field = (name) =>
+            frontmatter[1].match(
+              new RegExp("^" + name + ":\\s*(.*)$", "m"),
+            )?.[1] || "";
+          const parse = (value, fallback = "") => {
+            try {
+              return JSON.parse(value);
+            } catch {
+              return value || fallback;
+            }
+          };
+          record.name ||= parse(field("name"), id);
+          record.category ||= parse(field("category"), "Allgemein");
+          const aliases = parse(field("aliases"), []);
+          record.aliases ||= Array.isArray(aliases)
+            ? aliases
+            : String(aliases)
+                .split(/[;,]/)
+                .map((alias) => alias.trim())
+                .filter(Boolean);
+          record.color ||= parse(field("color"), "");
+          record.traits ||= parse(field("traits"), "");
+          record.relationships ||= parse(field("relationships"), []);
+          record.description ||= body.slice(frontmatter[0].length).trim();
+        }
+        record.name ||= id;
+        record.category ||= "Allgemein";
+        record.aliases ||= [];
+        record.color ||= "";
+        record.traits ||= "";
+        record.relationships ||= [];
+        record.description ||= "";
+      }
       into.push({ id, file: folder + "/" + file.name, body, ...record });
     }
   }
@@ -224,12 +265,16 @@ async function readProject() {
   places.sort((a, b) =>
     a.name.localeCompare(b.name, undefined, { numeric: true }),
   );
+  knowledge.sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true }),
+  );
   return {
     name: metadata.name || path.basename(projectRoot),
     root: projectRoot,
     chapters,
     characters,
     places,
+    knowledge,
     goal: metadata.goal || 100000,
     history: metadata.history || [],
   };
@@ -272,10 +317,7 @@ async function chooseProjectImage(folder) {
   const source = result.filePaths[0];
   const extension = path.extname(source).toLowerCase();
   const relative =
-    folder +
-    "/images/" +
-    safeId(path.basename(source, extension)) +
-    extension;
+    folder + "/images/" + safeId(path.basename(source, extension)) + extension;
   const target = insideProject(...relative.split("/"));
   await fs.mkdir(path.dirname(target), { recursive: true });
   await fs.copyFile(source, target);
@@ -320,6 +362,7 @@ function registerIpc() {
       goal: 100000,
       chapters: {},
       characters: {},
+      knowledge: {},
       history: [],
     });
     const project = await readProject();
@@ -485,6 +528,73 @@ ${record.description}
     for (const place of Object.values(places))
       if (place.parent === id) place.parent = "";
     await writeMetadata({ places });
+    return true;
+  });
+  ipcMain.handle("knowledge:save", async (_event, entry) => {
+    const id = safeId(entry.id || entry.name);
+    const file = insideProject("Knowledge", id + ".md");
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    const record = {
+      name: String(entry.name || "").trim(),
+      category: String(entry.category || "Allgemein").trim(),
+      aliases: String(entry.aliases || "")
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean),
+      description: String(entry.description || ""),
+      traits: String(entry.traits || ""),
+      color: /^#[0-9a-f]{6}$/i.test(String(entry.color || ""))
+        ? String(entry.color)
+        : "#d9e8ff",
+      relationships: Array.isArray(entry.relationships)
+        ? entry.relationships
+            .filter(
+              (relation) =>
+                relation &&
+                ["character", "place", "knowledge"].includes(
+                  relation.targetKind,
+                ) &&
+                relation.target &&
+                relation.type,
+            )
+            .map((relation) => ({
+              targetKind: String(relation.targetKind),
+              target: String(relation.target),
+              type: String(relation.type),
+            }))
+        : [],
+    };
+    const markdown = `---
+name: ${JSON.stringify(record.name)}
+category: ${JSON.stringify(record.category)}
+aliases: ${JSON.stringify(record.aliases)}
+color: ${JSON.stringify(record.color)}
+traits: ${JSON.stringify(record.traits)}
+relationships: ${JSON.stringify(record.relationships)}
+---
+
+${record.description}
+`;
+    await fs.writeFile(file, markdown, "utf8");
+    await writeMetadata({
+      knowledge: {
+        ...(await readMetadataPart("knowledge")),
+        [id]: record,
+      },
+    });
+    return { id, file: "Knowledge/" + id + ".md" };
+  });
+  ipcMain.handle("knowledge:delete", async (_event, idValue) => {
+    const id = safeId(idValue);
+    await fs.rm(insideProject("Knowledge", id + ".md"), { force: true });
+    const knowledge = await readMetadataPart("knowledge");
+    delete knowledge[id];
+    for (const entry of Object.values(knowledge))
+      entry.relationships = (entry.relationships || []).filter(
+        (relation) =>
+          relation.targetKind !== "knowledge" || relation.target !== id,
+      );
+    await writeMetadata({ knowledge });
     return true;
   });
   ipcMain.handle("project:settings", async (_event, settings) => {

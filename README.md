@@ -1,12 +1,15 @@
 # Mycel
 
-Mycel is a calm, local-first desktop writing app by **Valenx** (GitHub: [@VaIenx](https://github.com/VaIenx)). It helps novelists write chapters, manage characters, and follow their writing progress. Manuscripts stay in ordinary Markdown files on your computer.
+Mycel is a calm, local-first desktop writing app by **Valenx** (GitHub: [@VaIenx](https://github.com/VaIenx)). It helps novelists write chapters, develop characters and places, collect world knowledge, and follow their writing progress. Manuscripts stay in ordinary Markdown files on your computer.
 
 ## Features
 
 - Write and organize chapters by volume, status, and order.
 - Build character profiles with roles, aliases, descriptions, portraits, and relationships.
-- Link character names in the manuscript to their profiles.
+- Organize places by category and hierarchy, with images and descriptions.
+- Create flexible knowledge entries for races, religions, magic, objects, and more.
+- Link characters, places, and knowledge automatically when their names or aliases appear in the manuscript.
+- Connect knowledge entries to characters, places, and other entries.
 - Track manuscript word counts, daily writing, and progress toward a word goal.
 - Open and continue a project from its local folder.
 
@@ -28,11 +31,14 @@ My Novel/
 ├── Chapters/             One Markdown file per chapter
 ├── Characters/           One Markdown profile per character
 │   └── images/           Portraits selected in Mycel
+├── Places/               One Markdown profile per place
+│   └── images/           Place images selected in Mycel
+├── Knowledge/            One Markdown profile per knowledge entry
 └── .mycel/
-    └── project.json      Order, status, character details, goal, daily totals
+    └── project.json      Organization, profiles, goal, and daily totals
 ```
 
-Chapter text and character profiles remain readable and editable outside Mycel. The small `.mycel/project.json` file stores organization and progress data; it does not contain the manuscript text. Back up the whole project folder to preserve a project.
+Chapter text, character profiles, places, and knowledge entries remain readable and editable outside Mycel. The small `.mycel/project.json` file stores organization and progress data; it does not contain the manuscript text. Back up the whole project folder to preserve a project.
 
 ## Development
 

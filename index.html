@@ -18,10 +18,17 @@
           <button data-page="chapters"><span>▤</span> Kapitel</button>
           <button data-page="characters"><span>♧</span> Figuren</button>
           <button data-page="places"><span>⌖</span> Orte</button>
+          <button data-page="knowledge"><span>◇</span> Wissen</button>
           <button data-page="writing"><span>✎</span> Schreiben</button>
           <button data-page="progress"><span>⌁</span> Fortschritt</button>
         </nav>
         <div class="top-actions">
+          <button
+            id="project-search-open"
+            class="icon-button search-open"
+            title="Im Projekt suchen"
+            aria-label="Im Projekt suchen"
+          >⌕</button>
           <span id="project-pill" class="project-pill"
             >Kein Projekt geöffnet</span
           ><button
@@ -40,6 +47,17 @@
       <main id="page" class="page"></main>
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
       <dialog id="dialog" class="dialog"></dialog>
+      <dialog id="search-dialog" class="dialog project-search-dialog">
+        <div class="project-search-panel">
+          <label class="project-search-input-wrap">
+            <span aria-hidden="true">⌕</span>
+            <input id="project-search-input" type="search" placeholder="Im gesamten Projekt suchen …" autocomplete="off" />
+            <kbd>Esc</kbd>
+          </label>
+          <div id="project-search-results" class="project-search-results"></div>
+          <div class="project-search-help">Kapitel, Figuren, Orte und Wissen</div>
+        </div>
+      </dialog>
     </div>
     <div id="character-tooltip" class="character-tooltip" hidden></div>
     <script src="renderer.js"></script>
