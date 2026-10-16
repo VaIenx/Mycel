@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700">
+  <defs><linearGradient id="forest" y2="1"><stop stop-color="#9db39c"/><stop offset="1" stop-color="#354e41"/></linearGradient></defs>
+  <rect width="1200" height="700" fill="url(#forest)"/><circle cx="595" cy="236" r="142" fill="#e9dfbd" opacity=".44"/><g fill="#304b3b"><path d="M30 550 140 130l125 420Zm180 80 143-530 147 530Zm720 10 104-485 139 485Zm-225-5 128-410 120 410Z"/></g>
+  <path d="M0 590q220-120 450 16t420-7 330 6v95H0Z" fill="#243b31"/><g stroke="#bdcda0" stroke-width="9" opacity=".75"><path d="M250 620q125-50 214-7t178-22 270 37" fill="none"/><path d="M470 650q20-104 89-140t78-119m81 264q-22-82-66-111" fill="none"/></g><g fill="#d2dbad"><circle cx="387" cy="540" r="8"/><circle cx="745" cy="582" r="11"/><circle cx="840" cy="533" r="7"/></g>
+</svg>

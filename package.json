@@ -7,6 +7,7 @@
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
+    "build:linux": "node scripts/build-linux.cjs",
     "format": "prettier --write main.cjs preload.cjs renderer.js index.html styles.css"
   },
   "devDependencies": {

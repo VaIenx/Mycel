@@ -16,15 +16,23 @@ npm start
 
 `npm start` opens the desktop application through Electron. No build step is needed for the current source layout.
 
+On Linux x64, create a standalone desktop folder and launcher with:
+
+```sh
+npm run build:linux
+```
+
+The output is `dist/Mycel-linux-x64`. Start it with `Mycel` or open `Mycel.desktop` from the file manager.
+
 ## Package layout
 
-| File | Purpose |
-| --- | --- |
-| `main.cjs` | Electron main process, project folders, Markdown files, and metadata |
-| `preload.cjs` | Secure IPC bridge between the app and its interface |
-| `index.html` | Application shell and navigation |
-| `renderer.js` | Chapters, writing, characters, relationships, and progress views |
-| `styles.css` | Mycel's warm, paper-like desktop interface |
-| `package.json` | App metadata and start command |
+| File           | Purpose                                                              |
+| -------------- | -------------------------------------------------------------------- |
+| `main.cjs`     | Electron main process, project folders, Markdown files, and metadata |
+| `preload.cjs`  | Secure IPC bridge between the app and its interface                  |
+| `index.html`   | Application shell and navigation                                     |
+| `renderer.js`  | Chapters, writing, characters, relationships, and progress views     |
+| `styles.css`   | Mycel's warm, paper-like desktop interface                           |
+| `package.json` | App metadata and start command                                       |
 
 Project data is written to the folder chosen by the user. Mycel does not keep manuscript text in an application database.

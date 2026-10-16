@@ -1,0 +1,210 @@
+{
+  "name": "Das Archiv unter der Wurzel",
+  "goal": 35000,
+  "chapters": {
+    "01-die-tuer-im-moos": {
+      "title": "Die Tür im Moos",
+      "order": 1,
+      "status": "Fertig",
+      "volume": "Band 1 · Ankunft",
+      "target": 1800,
+      "updated": "2026-10-15T18:20:00.000Z"
+    },
+    "02-das-archiv": {
+      "title": "Das Archiv",
+      "order": 2,
+      "status": "In Arbeit",
+      "volume": "Band 1 · Ankunft",
+      "target": 2200,
+      "updated": "2026-10-16T16:40:00.000Z"
+    },
+    "03-die-stimme-im-glas": {
+      "title": "Die Stimme im Glas",
+      "order": 3,
+      "status": "Entwurf",
+      "volume": "Band 1 · Ankunft",
+      "target": 2000,
+      "updated": "2026-10-14T12:00:00.000Z"
+    },
+    "04-ein-neuer-anfang": {
+      "title": "Ein neuer Anfang",
+      "order": 4,
+      "status": "Entwurf",
+      "volume": "Band 2 · Verbindungen",
+      "target": 2400,
+      "updated": "2026-10-13T09:00:00.000Z"
+    }
+  },
+  "characters": {
+    "mira-vel": {
+      "name": "Mira Vel",
+      "role": "Protagonistin",
+      "aliases": ["Mira", "Kartografin"],
+      "description": "Eine junge Kartografin, die lieber Fragen stellt, als einer fertigen Karte zu vertrauen. Sie sucht nach ihrem verschollenen Bruder.",
+      "traits": "Beobachtet genau · zeichnet auf alles, was sie nicht versteht · trägt einen Messingkompass ihrer Mutter",
+      "image": "Characters/images/mira-vel.svg",
+      "color": "#d4e8cf",
+      "relationships": [
+        { "target": "oren-thal", "type": "alter Freund" },
+        { "target": "senn", "type": "unfreiwillige Verbündete" }
+      ]
+    },
+    "oren-thal": {
+      "name": "Oren Thal",
+      "role": "Begleiter",
+      "aliases": ["Oren", "der Fährmann"],
+      "description": "Ein schweigsamer Fährmann aus Brückenruh. Er kennt die Flusswege, verschweigt aber, weshalb er das Archiv meidet.",
+      "traits": "Ruhig · kennt alte Lieder · schuldet Mira eine Erklärung",
+      "image": "Characters/images/oren-thal.svg",
+      "color": "#d5e2ee",
+      "relationships": [{ "target": "mira-vel", "type": "alte Freundschaft" }]
+    },
+    "senn": {
+      "name": "Senn",
+      "role": "Nebenfigur",
+      "aliases": ["die Stimme", "Wächterin"],
+      "description": "Eine Wächterin, deren Bewusstsein in einem Gefäß aus Glas bewahrt wird. Senn erinnert sich nur bruchstückhaft an ihr früheres Leben.",
+      "traits": "Direkt · wissbegierig · fürchtet das Vergessen",
+      "image": "",
+      "color": "#f0dfbd",
+      "relationships": [{ "target": "mira-vel", "type": "Vertrauen wächst" }]
+    }
+  },
+  "places": {
+    "norden": {
+      "name": "Norden",
+      "aliases": ["das Nordland"],
+      "category": "Kontinent",
+      "continent": "Norden",
+      "region": "",
+      "city": "",
+      "parent": "",
+      "description": "Ein kühler Landstrich aus uralten Wäldern, Mooren und Handelswegen.",
+      "traits": "Lange Dämmerung · viele alte Grenzsteine",
+      "image": "Places/images/norden.svg",
+      "color": "#d8e9d5"
+    },
+    "brueckenruh": {
+      "name": "Brückenruh",
+      "aliases": ["die Fährstadt"],
+      "category": "Stadt",
+      "continent": "Norden",
+      "region": "Moorgrenze",
+      "city": "Brückenruh",
+      "parent": "norden",
+      "description": "Eine kleine Stadt an drei Flussarmen. Die Häuser stehen auf alten Eichenpfählen, und jede Brücke trägt einen anderen Namen.",
+      "traits": "Markt am Donnerstag · Fähre zum Wurzelwald",
+      "image": "Places/images/brueckenruh.svg",
+      "color": "#d5e2ee"
+    },
+    "wurzelwald": {
+      "name": "Wurzelwald",
+      "aliases": ["der Wald", "Wurzelhain"],
+      "category": "Wald",
+      "continent": "Norden",
+      "region": "Moorgrenze",
+      "city": "",
+      "parent": "norden",
+      "description": "Ein Wald, dessen mächtige Wurzeln Hohlräume unter dem Boden formen. Bei Regen hört man dort ein leises Summen.",
+      "traits": "Nasses Moos · silberne Pilze · Wege verändern sich",
+      "image": "Places/images/wurzelwald.svg",
+      "color": "#cfe4ce"
+    },
+    "das-archiv": {
+      "name": "Das Archiv unter der Wurzel",
+      "aliases": ["Wurzelarchiv", "das Archiv"],
+      "category": "Ruine",
+      "continent": "Norden",
+      "region": "Moorgrenze",
+      "city": "",
+      "parent": "wurzelwald",
+      "description": "Eine versiegelte Bibliothek tief unter dem ältesten Baum. Die Regale wachsen aus Holz und Stein, als wären sie Teil des Bodens.",
+      "traits": "Eingang hinter einer Mooswand · ruhige, kreisförmige Räume",
+      "image": "Places/images/archiv.svg",
+      "color": "#e7ddc7"
+    }
+  },
+  "knowledge": {
+    "wurzelbund": {
+      "name": "Wurzelbund",
+      "category": "Religion",
+      "aliases": ["Bund der Wurzel", "der Bund"],
+      "description": "Eine alte Glaubensgemeinschaft. Ihre Mitglieder glauben, dass Erinnerungen wie Nährstoffe durch ein unterirdisches Netz wandern.",
+      "traits": "Keine zentralen Tempel · Lieder dienen als Gebete · Zeichen ist ein offener Kreis",
+      "color": "#dce7ce",
+      "relationships": [
+        {
+          "targetKind": "place",
+          "target": "das-archiv",
+          "type": "bewahrt seine Chroniken"
+        },
+        {
+          "targetKind": "character",
+          "target": "senn",
+          "type": "Senn war Mitglied"
+        }
+      ]
+    },
+    "glasfluester": {
+      "name": "Glasflüster",
+      "category": "Magie",
+      "aliases": ["Glasstimme", "Flüstern im Glas"],
+      "description": "Eine seltene Kunst, bei der ein Gedanke in geschmolzenes Glas eingeschrieben wird. Die Stimme bleibt erhalten, aber nicht jede Erinnerung.",
+      "traits": "Benötigt Ruhe und Wärme · jede Anwendung kostet eine Erinnerung",
+      "color": "#d4e7e6",
+      "relationships": [
+        {
+          "targetKind": "knowledge",
+          "target": "wurzelbund",
+          "type": "vom Bund entwickelt"
+        },
+        {
+          "targetKind": "character",
+          "target": "senn",
+          "type": "hält Senns Stimme"
+        }
+      ]
+    },
+    "velori": {
+      "name": "Velori",
+      "category": "Volk",
+      "aliases": ["Wurzelkundige"],
+      "description": "Menschen, die seit Generationen in den Siedlungen des Nordens leben und die Wege unter den Wurzeln lesen können.",
+      "traits": "Erkennen alte Wegzeichen · bewahren Familiengeschichten mündlich",
+      "color": "#e9d9c9",
+      "relationships": [
+        {
+          "targetKind": "place",
+          "target": "wurzelwald",
+          "type": "lebt am Rand"
+        }
+      ]
+    },
+    "die-wandernde-karte": {
+      "name": "Die wandernde Karte",
+      "category": "Artefakt",
+      "aliases": ["Miras Karte", "Karte aus Wurzelpapier"],
+      "description": "Eine Karte auf dünnem Wurzelpapier. Sie zeigt keine Straßen, sondern die Orte, an die sich ihre Besitzerin gerade am stärksten erinnert.",
+      "traits": "Verändert sich bei Nacht · reagiert auf den Messingkompass",
+      "color": "#eadfbf",
+      "relationships": [
+        {
+          "targetKind": "character",
+          "target": "mira-vel",
+          "type": "gehört Mira"
+        },
+        {
+          "targetKind": "knowledge",
+          "target": "glasfluester",
+          "type": "reagiert auf die Kunst"
+        }
+      ]
+    }
+  },
+  "history": [
+    { "date": "2026-10-13", "words": 540 },
+    { "date": "2026-10-14", "words": 820 },
+    { "date": "2026-10-15", "words": 410 },
+    { "date": "2026-10-16", "words": 275 }
+  ]
+}

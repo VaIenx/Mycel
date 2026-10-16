@@ -11,6 +11,7 @@ Mycel is a calm, local-first desktop writing app by **Valenx** (GitHub: [@VaIenx
 - Link characters, places, and knowledge automatically when their names or aliases appear in the manuscript.
 - Connect knowledge entries to characters, places, and other entries.
 - Track manuscript word counts, daily writing, and progress toward a word goal.
+- Search the whole project and replace text throughout the manuscript.
 - Open and continue a project from its local folder.
 
 ## Start
@@ -21,6 +22,26 @@ Install [Node.js](https://nodejs.org/) 22.12 or newer, then run from the project
 npm install
 npm start
 ```
+
+On Linux, build Mycel as a standalone desktop app:
+
+```sh
+npm run build:linux
+```
+
+The runnable app folder and desktop entry are created in `dist/Mycel-linux-x64`. The desktop shortcut opens Mycel directly without `npm start`.
+
+## Demo project
+
+`Mycel-Testprojekt` includes sample chapters, linked characters, hierarchical places with images, and connected knowledge entries. Open the folder in Mycel to explore these features.
+
+## Ideas for future extensions
+
+- Plan scenes with a point of view, purpose, and short summary.
+- Keep chapter snapshots so earlier drafts can be compared or restored.
+- Export a manuscript to DOCX, PDF, or EPUB with configurable formatting.
+- Reorder chapters and scenes directly in the outline.
+- Add project backups with a simple restore flow.
 
 ## Project files
 
