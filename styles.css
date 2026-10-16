@@ -316,11 +316,6 @@ select:focus-visible {
 .welcome .heading-actions {
   margin-top: 25px;
 }
-.welcome-note {
-  margin-top: 48px;
-  color: #977655;
-  font-size: 13px;
-}
 .tabs {
   display: flex;
   gap: 28px;
@@ -1039,6 +1034,87 @@ body::before {
   background: #f3f5ed;
   box-shadow: none;
 }
+.welcome-recent {
+  margin-top: 32px;
+}
+.welcome-recent h2 {
+  margin: 0 0 12px;
+  color: #526e58;
+  font-size: 14px;
+  font-weight: 600;
+}
+.welcome-project-list {
+  display: grid;
+  gap: 8px;
+}
+.welcome-project-row {
+  display: flex;
+  gap: 8px;
+}
+.welcome-project {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 13px;
+  border: 1px solid #c1d0be;
+  border-radius: 2px;
+  background: #edf2e8;
+  text-align: left;
+}
+.welcome-project:hover {
+  border-color: #829c84;
+  background: #e6eee2;
+}
+.welcome-project-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #b6c8b4;
+  background: #dce8da;
+  color: #55725b;
+}
+.welcome-project-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.welcome-project-copy strong,
+.welcome-project-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.welcome-project-copy strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.welcome-project-copy small {
+  color: #728578;
+  font-size: 11px;
+}
+.welcome-project-arrow {
+  margin-left: auto;
+  color: #607c65;
+  font-size: 21px;
+}
+.welcome-project-remove {
+  width: 42px;
+  flex: 0 0 auto;
+  border: 1px solid #c1d0be;
+  border-radius: 2px;
+  background: #edf2e8;
+  color: #607c65;
+  font-size: 20px;
+}
+.welcome-project-remove:hover {
+  border-color: #829c84;
+  background: #e6eee2;
+  color: #365b43;
+}
 
 .button,
 .select-like,
@@ -1113,8 +1189,9 @@ select {
   margin-left: 0;
 }
 .place-card {
-  min-height: 210px;
-  padding: 18px;
+  min-height: 285px;
+  padding: 0;
+  overflow: hidden;
   border: 1px solid #bdcbb9;
   border-radius: 3px;
   background: #f3f5ed;
@@ -1124,6 +1201,31 @@ select {
 .place-card:hover {
   border-color: #8fa68f;
   background: #edf3e9;
+}
+.place-card-image {
+  display: grid;
+  height: 112px;
+  overflow: hidden;
+  place-items: center;
+  border-bottom: 1px solid #c3d1c1;
+  background:
+    linear-gradient(rgba(74, 103, 80, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74, 103, 80, 0.055) 1px, transparent 1px),
+    #e4ece1;
+  background-size: 16px 16px;
+  color: #809982;
+  font-size: 34px;
+}
+.place-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.place-card-image.has-image {
+  background: #dce7d9;
+}
+.place-card-content {
+  padding: 14px 16px 16px;
 }
 .place-card-top {
   display: flex;
@@ -1156,6 +1258,38 @@ select {
 .place-detail {
   display: grid;
   gap: 14px;
+}
+.place-detail-cover {
+  height: 220px;
+  overflow: hidden;
+  border: 1px solid #bdcbb9;
+  background: #e4ece1;
+}
+.place-detail-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.place-image-preview {
+  display: grid;
+  min-height: 150px;
+  max-height: 240px;
+  overflow: hidden;
+  place-items: center;
+  border: 1px dashed #aebfac;
+  background: #e8eee5;
+  color: #738778;
+  font-size: 12px;
+}
+.place-image-preview img {
+  width: 100%;
+  max-height: 240px;
+  object-fit: cover;
+}
+.place-image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
 }
 .place-facts {
   display: grid;

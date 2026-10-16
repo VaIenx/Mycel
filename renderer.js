@@ -1,6 +1,7 @@
 const api = window.mycel;
 const state = {
   project: null,
+  recentProjects: [],
   page: "home",
   activeChapter: null,
   activeCharacter: null,
@@ -163,9 +164,40 @@ function renderWelcome() {
         Neues Projekt</button
       ><button class="button" data-action="open-project">Projekt öffnen</button>
     </div>
-    <div class="welcome-note">
-      Keine Konten, keine Synchronisierung, keine Ablenkung.
-    </div>
+    ${state.recentProjects.length
+      ? html`<section class="welcome-recent">
+          <h2>Zuletzt geöffnet</h2>
+          <div class="welcome-project-list">
+            ${state.recentProjects.slice(0, 4)
+              .map(
+                (project) => html`<div class="welcome-project-row">
+                  <button
+                    class="welcome-project"
+                    data-action="open-recent-project"
+                    data-root="${esc(project.root)}"
+                  >
+                    <span class="welcome-project-icon">↗</span>
+                    <span class="welcome-project-copy">
+                      <strong>${esc(project.name)}</strong>
+                      <small>${esc(project.root)}</small>
+                    </span>
+                    <span class="welcome-project-arrow">›</span>
+                  </button>
+                  <button
+                    class="welcome-project-remove"
+                    data-action="remove-recent-project"
+                    data-root="${esc(project.root)}"
+                    aria-label="${esc(project.name)} aus Zuletzt geöffnet entfernen"
+                    title="Aus der Liste entfernen"
+                  >
+                    ×
+                  </button>
+                </div>`,
+              )
+              .join("")}
+          </div>
+        </section>`
+      : ""}
   </section>`;
 }
 
@@ -491,32 +523,40 @@ function placeRegion(place) {
 }
 
 function placeCard(place) {
+  const image = place.image
+    ? html`<img src="${esc(place.image)}" alt="" />`
+    : html`<span>⌖</span>`;
   return html`<article
     class="place-card"
     data-action="open-place"
     data-id="${esc(place.id)}"
   >
-    <div class="place-card-top">
-      <span class="role-chip">${esc(place.category || "Ort")}</span>
-      <i style="--character-highlight: ${characterColor(place)}"></i>
+    <div class="place-card-image ${place.image ? "has-image" : ""}">
+      ${image}
     </div>
-    <h3>${esc(place.name)}</h3>
-    <div class="place-path">${esc(placePath(place))}</div>
-    <p>
-      ${esc(
-        excerpt(
-          place.description || place.traits || "Noch keine Beschreibung.",
-          120,
-        ),
-      )}
-    </p>
-    <small
-      >${esc(
-        [placeContinent(place), placeRegion(place), placeCity(place)]
-          .filter(Boolean)
-          .join(" · ") || "Noch nicht geografisch eingeordnet",
-      )}</small
-    >
+    <div class="place-card-content">
+      <div class="place-card-top">
+        <span class="role-chip">${esc(place.category || "Ort")}</span>
+        <i style="--character-highlight: ${characterColor(place)}"></i>
+      </div>
+      <h3>${esc(place.name)}</h3>
+      <div class="place-path">${esc(placePath(place))}</div>
+      <p>
+        ${esc(
+          excerpt(
+            place.description || place.traits || "Noch keine Beschreibung.",
+            120,
+          ),
+        )}
+      </p>
+      <small
+        >${esc(
+          [placeContinent(place), placeRegion(place), placeCity(place)]
+            .filter(Boolean)
+            .join(" · ") || "Noch nicht geografisch eingeordnet",
+        )}</small
+      >
+    </div>
   </article>`;
 }
 
@@ -1564,6 +1604,31 @@ function editPlaceForm(place = {}) {
           name="aliases"
           value="${esc((place.aliases || []).join(", "))}"
           placeholder="Kurzname, frühere Namen" /></label
+      ><div class="field full">
+        <label>Titelbild</label>
+        <div class="place-image-preview" data-place-image-preview>
+          ${place.image
+            ? html`<img src="${esc(place.image)}" alt="" />`
+            : html`<span>Kein Bild ausgewählt</span>`}
+        </div>
+        <input
+          type="hidden"
+          name="image"
+          value="${esc(place.image || "")}"
+        />
+        <div class="place-image-actions">
+          <button type="button" class="button small" data-place-image>
+            Bild auswählen …
+          </button>
+          <button
+            type="button"
+            class="button small subtle"
+            data-remove-place-image
+          >
+            Bild entfernen
+          </button>
+        </div>
+      </div
       ><label class="field full"
         >Beschreibung<textarea
           name="description"
@@ -1641,6 +1706,7 @@ function editPlaceForm(place = {}) {
           aliases: data.get("aliases"),
           description: data.get("description"),
           traits: data.get("traits"),
+          image: data.get("image"),
           color,
         });
       } catch (error) {
@@ -1656,6 +1722,22 @@ function editPlaceForm(place = {}) {
   );
   dialog.querySelector('[name="description"]').value = place.description || "";
   dialog.querySelector('[name="traits"]').value = place.traits || "";
+  dialog
+    .querySelector("[data-place-image]")
+    .addEventListener("click", async () => {
+      const image = await api.choosePlaceImage();
+      if (!image) return;
+      dialog.querySelector('[name="image"]').value = image;
+      dialog.querySelector("[data-place-image-preview]").innerHTML =
+        `<img src="${esc(image)}" alt="" />`;
+    });
+  dialog
+    .querySelector("[data-remove-place-image]")
+    .addEventListener("click", () => {
+      dialog.querySelector('[name="image"]').value = "";
+      dialog.querySelector("[data-place-image-preview]").innerHTML =
+        "<span>Kein Bild ausgewählt</span>";
+    });
 }
 
 function openPlace(place) {
@@ -1666,6 +1748,11 @@ function openPlace(place) {
   openDialog(
     place.name,
     html`<div class="place-detail">
+      ${place.image
+        ? html`<div class="place-detail-cover">
+            <img src="${esc(place.image)}" alt="${esc(place.name)}" />
+          </div>`
+        : ""}
       <span class="role-chip">${esc(place.category || "Ort")}</span>
       <div class="place-path">${esc(placePath(place))}</div>
       <div class="place-facts">
@@ -1777,6 +1864,7 @@ function createProject() {
       const project = await api.createProject(data.get("name").trim());
       if (!project) return;
       state.project = project;
+      state.recentProjects = await api.recentProjects();
       state.page = "home";
       dialog.close();
       render();
@@ -1790,8 +1878,27 @@ async function openProject() {
   const project = await api.chooseProject();
   if (!project) return;
   state.project = project;
+  state.recentProjects = await api.recentProjects();
   state.activeChapter = project.chapters[0]?.id || null;
   toast("Projekt geöffnet.");
+  render();
+}
+
+async function openRecentProject(root) {
+  const project = await api.openRecentProject(root);
+  if (!project) {
+    state.recentProjects = await api.recentProjects();
+    render();
+    toast("Dieses Projekt ist nicht mehr verfügbar.");
+    return;
+  }
+  state.project = project;
+  state.activeChapter = project.chapters[0]?.id || null;
+  render();
+}
+
+async function removeRecentProject(root) {
+  state.recentProjects = await api.forgetRecentProject(root);
   render();
 }
 
@@ -1818,6 +1925,10 @@ document.addEventListener("click", async (event) => {
   }
   if (action === "create-project") createProject();
   else if (action === "open-project") void openProject();
+  else if (action === "open-recent-project")
+    void openRecentProject(button.dataset.root);
+  else if (action === "remove-recent-project")
+    void removeRecentProject(button.dataset.root);
   else if (action === "new-chapter") createChapter();
   else if (action === "new-character") editCharacterForm();
   else if (action === "new-place") editPlaceForm();
@@ -1877,8 +1988,11 @@ document
   .querySelector("#open-project")
   .addEventListener("click", () => void openProject());
 document.querySelector("#new-project").addEventListener("click", createProject);
-void api.currentProject().then((project) => {
-  state.project = project;
-  state.activeChapter = project?.chapters[0]?.id || null;
-  render();
-});
+void Promise.all([api.currentProject(), api.recentProjects()]).then(
+  ([project, recentProjects]) => {
+    state.project = project;
+    state.recentProjects = recentProjects;
+    state.activeChapter = project?.chapters[0]?.id || null;
+    render();
+  },
+);

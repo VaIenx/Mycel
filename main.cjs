@@ -7,6 +7,67 @@ let windowRef;
 let projectRoot = "";
 const projectFile = ".mycel/project.json";
 
+function recentProjectsFile() {
+  return path.join(app.getPath("userData"), "recent-projects.json");
+}
+
+async function readRecentProjects() {
+  try {
+    const saved = JSON.parse(await fs.readFile(recentProjectsFile(), "utf8"));
+    const projects = [];
+    for (const item of saved) {
+      try {
+        const stat = await fs.stat(item.root);
+        if (!stat.isDirectory()) continue;
+        let metadata = {};
+        try {
+          metadata = JSON.parse(
+            await fs.readFile(path.join(item.root, projectFile), "utf8"),
+          );
+        } catch {}
+        projects.push({
+          root: item.root,
+          name: metadata.name || path.basename(item.root),
+        });
+      } catch {}
+    }
+    const recent = projects.slice(0, 8);
+    await fs.writeFile(
+      recentProjectsFile(),
+      JSON.stringify(recent, null, 2) + "\n",
+      "utf8",
+    );
+    return recent;
+  } catch {
+    return [];
+  }
+}
+
+async function rememberProject(root, name) {
+  const recent = await readRecentProjects();
+  const projects = [
+    { root, name },
+    ...recent.filter((project) => project.root !== root),
+  ].slice(0, 8);
+  await fs.mkdir(path.dirname(recentProjectsFile()), { recursive: true });
+  await fs.writeFile(
+    recentProjectsFile(),
+    JSON.stringify(projects, null, 2) + "\n",
+    "utf8",
+  );
+}
+
+async function forgetProject(root) {
+  const recent = await readRecentProjects();
+  const projects = recent.filter((project) => project.root !== root);
+  await fs.writeFile(
+    recentProjectsFile(),
+    JSON.stringify(projects, null, 2) + "\n",
+    "utf8",
+  );
+  return projects;
+}
+
 function insideProject(...parts) {
   const root = path.resolve(projectRoot);
   const target = path.resolve(root, ...parts);
@@ -131,6 +192,7 @@ async function readProject() {
           record.continent ||= parse(field("continent"), "");
           record.region ||= parse(field("region"), "");
           record.city ||= parse(field("city"), "");
+          record.image ||= parse(field("image"), "");
           if (record.parent === undefined)
             record.parent = parse(field("parent"), "");
           record.color ||= parse(field("color"), "");
@@ -143,10 +205,15 @@ async function readProject() {
         record.continent ||= "";
         record.region ||= "";
         record.city ||= "";
+        record.image ||= "";
         if (record.parent === undefined) record.parent = "";
         record.color ||= "";
         record.traits ||= "";
         record.description ||= "";
+        if (record.image && !String(record.image).startsWith("file:"))
+          record.image = pathToFileURL(
+            insideProject(...String(record.image).split("/")),
+          ).href;
       }
       into.push({ id, file: folder + "/" + file.name, body, ...record });
     }
@@ -191,6 +258,30 @@ function safeId(value) {
   return id;
 }
 
+async function chooseProjectImage(folder) {
+  const result = await dialog.showOpenDialog(windowRef, {
+    properties: ["openFile"],
+    filters: [
+      {
+        name: "Bilder",
+        extensions: ["png", "jpg", "jpeg", "webp", "gif"],
+      },
+    ],
+  });
+  if (result.canceled || !result.filePaths[0]) return "";
+  const source = result.filePaths[0];
+  const extension = path.extname(source).toLowerCase();
+  const relative =
+    folder +
+    "/images/" +
+    safeId(path.basename(source, extension)) +
+    extension;
+  const target = insideProject(...relative.split("/"));
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.copyFile(source, target);
+  return pathToFileURL(target).href;
+}
+
 function registerIpc() {
   ipcMain.handle("project:choose", async () => {
     const result = await dialog.showOpenDialog(windowRef, {
@@ -199,9 +290,23 @@ function registerIpc() {
     if (result.canceled || !result.filePaths[0]) return null;
     projectRoot = result.filePaths[0];
     const project = await readProject();
+    await rememberProject(projectRoot, project.name);
     return project;
   });
   ipcMain.handle("project:current", async () => readProject());
+  ipcMain.handle("project:recent", async () => readRecentProjects());
+  ipcMain.handle("project:forget-recent", async (_event, root) =>
+    forgetProject(root),
+  );
+  ipcMain.handle("project:open-recent", async (_event, root) => {
+    const recent = await readRecentProjects();
+    const project = recent.find((item) => item.root === root);
+    if (!project) return null;
+    projectRoot = project.root;
+    const opened = await readProject();
+    await rememberProject(projectRoot, opened.name);
+    return opened;
+  });
   ipcMain.handle("project:create", async (_event, name) => {
     const result = await dialog.showOpenDialog(windowRef, {
       properties: ["openDirectory", "createDirectory"],
@@ -217,7 +322,9 @@ function registerIpc() {
       characters: {},
       history: [],
     });
-    return readProject();
+    const project = await readProject();
+    await rememberProject(projectRoot, project.name);
+    return project;
   });
   ipcMain.handle("chapter:save", async (_event, chapter) => {
     const id = safeId(chapter.id);
@@ -303,25 +410,10 @@ ${record.description}
     });
     return { id, file: "Characters/" + id + ".md" };
   });
-  ipcMain.handle("character:choose-image", async () => {
-    const result = await dialog.showOpenDialog(windowRef, {
-      properties: ["openFile"],
-      filters: [
-        { name: "Bilder", extensions: ["png", "jpg", "jpeg", "webp", "gif"] },
-      ],
-    });
-    if (result.canceled || !result.filePaths[0]) return "";
-    const source = result.filePaths[0];
-    const extension = path.extname(source).toLowerCase();
-    const relative =
-      "Characters/images/" +
-      safeId(path.basename(source, extension)) +
-      extension;
-    const target = insideProject(...relative.split("/"));
-    await fs.mkdir(path.dirname(target), { recursive: true });
-    await fs.copyFile(source, target);
-    return pathToFileURL(target).href;
-  });
+  ipcMain.handle("character:choose-image", () =>
+    chooseProjectImage("Characters"),
+  );
+  ipcMain.handle("place:choose-image", () => chooseProjectImage("Places"));
   ipcMain.handle("character:delete", async (_event, idValue) => {
     const id = safeId(idValue);
     await fs.rm(insideProject("Characters", id + ".md"), { force: true });
@@ -334,6 +426,18 @@ ${record.description}
     const id = safeId(place.id || place.name);
     const file = insideProject("Places", id + ".md");
     await fs.mkdir(path.dirname(file), { recursive: true });
+    let image = String(place.image || "");
+    if (image.startsWith("file:")) {
+      try {
+        image = path
+          .relative(projectRoot, fileURLToPath(image))
+          .split(path.sep)
+          .join("/");
+      } catch {
+        image = "";
+      }
+    }
+    if (image.startsWith("../") || path.isAbsolute(image)) image = "";
     const record = {
       name: String(place.name || "").trim(),
       aliases: String(place.aliases || "")
@@ -347,6 +451,7 @@ ${record.description}
       parent: String(place.parent || ""),
       description: String(place.description || ""),
       traits: String(place.traits || ""),
+      image,
       color: /^#[0-9a-f]{6}$/i.test(String(place.color || ""))
         ? String(place.color)
         : "#d9e8ff",
@@ -361,6 +466,7 @@ city: ${JSON.stringify(record.city)}
 parent: ${JSON.stringify(record.parent)}
 color: ${JSON.stringify(record.color)}
 traits: ${JSON.stringify(record.traits)}
+image: ${JSON.stringify(record.image)}
 ---
 
 ${record.description}
@@ -414,6 +520,7 @@ function createWindow() {
     minWidth: 960,
     minHeight: 650,
     backgroundColor: "#dfe7df",
+    icon: path.join(__dirname, "mycel.png"),
     title: "Mycel",
     autoHideMenuBar: true,
     webPreferences: {
