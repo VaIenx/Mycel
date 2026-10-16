@@ -606,7 +606,9 @@ select {
 }
 .editor-wrap {
   flex: 1;
-  overflow: auto;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
   border-radius: 15px;
   background: #eff2e9;
   border: 1px solid #bfccbf;
@@ -633,18 +635,83 @@ select {
   background: #cbdacd;
 }
 .editor-text {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   width: 100%;
-  height: calc(100% - 50px);
-  min-height: 480px;
+  height: 100%;
+  min-height: 0;
   resize: none;
   border: 0;
   border-radius: 0;
   background: transparent;
   padding: 35px 4vw;
+  overflow: auto;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: var(--ink);
   font:
     17px/1.75 Georgia,
     serif;
   outline: none;
+}
+.editor-text::selection {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background: #9bad9a88;
+}
+.editor-highlight {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: auto;
+  padding: 35px 4vw;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  font:
+    17px/1.75 Georgia,
+    serif;
+  pointer-events: none;
+}
+.editor-highlight:empty::before {
+  content: attr(data-placeholder);
+  color: #7a807b;
+}
+.character-mention {
+  border-radius: 2px;
+  background: var(--character-highlight);
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+}
+.character-tooltip {
+  position: fixed;
+  z-index: 20;
+  width: 250px;
+  padding: 12px 14px;
+  border: 1px solid #aebfac;
+  background: #f3f5ed;
+  color: var(--ink);
+  box-shadow: 0 8px 24px #243b3222;
+  pointer-events: none;
+}
+.character-tooltip[hidden] {
+  display: none;
+}
+.character-tooltip strong,
+.character-tooltip span {
+  display: block;
+}
+.character-tooltip span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.character-tooltip p {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
 }
 .editor-status {
   display: flex;

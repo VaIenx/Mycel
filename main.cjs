@@ -57,7 +57,15 @@ async function readProject() {
       );
     for (const file of files) {
       const id = path.basename(file.name, ".md");
-      const body = await fs.readFile(insideProject(folder, file.name), "utf8");
+      const storedBody = await fs.readFile(
+        insideProject(folder, file.name),
+        "utf8",
+      );
+      const body = storedBody.replace(
+        /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,
+        (_link, target, display) =>
+          display || path.basename(target).replace(/\.md$/i, ""),
+      );
       const record = { ...((metadata[kind + "s"] || {})[id] || {}) };
       if (kind === "character") {
         const frontmatter = body.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
@@ -83,6 +91,7 @@ async function readProject() {
                 .map((alias) => alias.trim())
                 .filter(Boolean);
           record.image ||= parse(field("image"), "");
+          record.color ||= parse(field("color"), "");
           record.traits ||= parse(field("traits"), "");
           record.relationships ||= parse(field("relationships"), []);
           record.description ||= body.slice(frontmatter[0].length).trim();
@@ -213,6 +222,9 @@ function registerIpc() {
       description: String(character.description || ""),
       traits: String(character.traits || ""),
       image,
+      color: /^#[0-9a-f]{6}$/i.test(String(character.color || ""))
+        ? String(character.color)
+        : "#d9e8ff",
       relationships: Array.isArray(character.relationships)
         ? character.relationships
             .filter((rel) => rel && rel.target && rel.type)
@@ -228,6 +240,7 @@ role: ${JSON.stringify(record.role)}
 aliases: ${JSON.stringify(record.aliases)}
 traits: ${JSON.stringify(record.traits)}
 image: ${JSON.stringify(record.image)}
+color: ${JSON.stringify(record.color)}
 relationships: ${JSON.stringify(record.relationships)}
 ---
 

@@ -34,6 +34,54 @@ const wordCount = (text = "") =>
       .trim()
       .match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu) || []
   ).length;
+const characterColors = [
+  "#d9e8ff",
+  "#f8d9df",
+  "#f6e8b8",
+  "#d8ecd8",
+  "#eadcf8",
+  "#f5dcc6",
+  "#d0eceb",
+  "#e8e4c9",
+];
+const characterColor = (
+  character,
+  characters = state.project?.characters || [],
+) => {
+  if (/^#[0-9a-f]{6}$/i.test(character.color || "")) return character.color;
+  const used = new Set(
+    characters
+      .filter((item) => item.id !== character.id)
+      .map((item) => item.color)
+      .filter((color) => /^#[0-9a-f]{6}$/i.test(color || "")),
+  );
+  const available = characterColors.filter((color) => !used.has(color));
+  const index = characters.findIndex((item) => item.id === character.id);
+  const previousUncolored = (
+    index < 0 ? characters : characters.slice(0, index)
+  ).filter((item) => !/^#[0-9a-f]{6}$/i.test(item.color || "")).length;
+  if (previousUncolored < available.length) return available[previousUncolored];
+  let colorIndex = index < 0 ? characters.length : index;
+  let color = generatedCharacterColor(colorIndex);
+  while (used.has(color)) color = generatedCharacterColor(++colorIndex);
+  return color;
+};
+
+function generatedCharacterColor(index) {
+  const hue = (index * 137.508) % 360;
+  const saturation = 0.42;
+  const lightness = 0.86;
+  const amplitude = saturation * Math.min(lightness, 1 - lightness);
+  const channel = (offset) => {
+    const k = (offset + hue / 30) % 12;
+    const value =
+      lightness - amplitude * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    return Math.round(value * 255)
+      .toString(16)
+      .padStart(2, "0");
+  };
+  return `#${channel(0)}${channel(8)}${channel(4)}`;
+}
 const format = (value) => new Intl.NumberFormat("de-DE").format(value || 0);
 const excerpt = (text, length = 205) =>
   String(text || "")
@@ -412,14 +460,6 @@ function renderWriting() {
   const ordered = [...chapters].sort(
     (a, b) => (a.order ?? 9999) - (b.order ?? 9999),
   );
-  const mentions = state.project.characters.filter(
-    (ch) =>
-      ch.name &&
-      new RegExp(
-        `(^|[^\\p{L}])${escapeRegex(ch.name)}([^\\p{L}]|$)`,
-        "iu",
-      ).test(chapter.body || ""),
-  );
   return html`<div class="editor-layout">
     <aside class="chapter-rail">
       <div class="rail-top">
@@ -468,6 +508,12 @@ function renderWriting() {
         ><button data-action="save-now">✓ Gespeichert</button>
       </div>
       <div class="editor-wrap">
+        <div
+          id="editor-highlight"
+          class="editor-highlight"
+          aria-hidden="true"
+          data-placeholder="Schreib den ersten Satz deiner Geschichte …"
+        ></div>
         <textarea
           id="editor-text"
           class="editor-text"
@@ -482,23 +528,6 @@ function renderWriting() {
           · ${String((chapter.body || "").length)} Zeichen</span
         >
       </div>
-      ${mentions.length
-        ? html`<div class="mention-hint">
-            Erwähnte Figuren:
-            ${mentions
-              .map(
-                (ch) =>
-                  html`<button
-                    class="button small"
-                    data-action="insert-wikilink"
-                    data-name="${esc(ch.name)}"
-                  >
-                    ${esc(ch.name)} · Link einfügen
-                  </button>`,
-              )
-              .join(" ")}
-          </div>`
-        : ""}
     </section>
   </div>`;
 }
@@ -600,6 +629,71 @@ function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function characterMatchData(characters) {
+  const matches = new Map();
+  characters.forEach((character) => {
+    [character.name, ...(character.aliases || [])]
+      .map((name) => String(name || "").trim())
+      .filter(Boolean)
+      .forEach((name) => {
+        const key = name.toLocaleLowerCase("de-DE");
+        if (!matches.has(key)) matches.set(key, { name, character });
+      });
+  });
+  return [...matches.values()].sort((a, b) => b.name.length - a.name.length);
+}
+
+function highlightedText(text, characters) {
+  const matches = characterMatchData(characters);
+  if (!matches.length) return esc(text);
+  const expression = new RegExp(
+    `(?<![\\p{L}\\p{N}_])(?:${matches
+      .map(({ name }) => escapeRegex(name))
+      .join("|")})(?![\\p{L}\\p{N}_])`,
+    "giu",
+  );
+  const byName = new Map(
+    matches.map(({ name, character }) => [
+      name.toLocaleLowerCase("de-DE"),
+      character,
+    ]),
+  );
+  let output = "";
+  let previous = 0;
+  for (const match of text.matchAll(expression)) {
+    output += esc(text.slice(previous, match.index));
+    const character = byName.get(match[0].toLocaleLowerCase("de-DE"));
+    output += `<span class="character-mention" data-character-id="${esc(
+      character.id,
+    )}" data-action="open-character" data-id="${esc(
+      character.id,
+    )}" style="--character-highlight: ${characterColor(character)}">${esc(
+      match[0],
+    )}</span>`;
+    previous = match.index + match[0].length;
+  }
+  return output + esc(text.slice(previous));
+}
+
+function showCharacterTooltip(character, event) {
+  const tooltip = document.querySelector("#character-tooltip");
+  tooltip.innerHTML = html`<strong>${esc(character.name)}</strong>
+    <span>${esc(character.role || "Figur")}</span>
+    <p>
+      ${esc(
+        excerpt(
+          character.description ||
+            character.traits ||
+            "Noch keine Beschreibung.",
+          120,
+        ),
+      )}
+    </p>`;
+  tooltip.hidden = false;
+  tooltip.style.left = `${Math.min(event.clientX + 14, innerWidth - 270)}px`;
+  tooltip.style.top = `${Math.min(event.clientY + 16, innerHeight - 120)}px`;
+}
+
 function render() {
   document
     .querySelectorAll(".primary-nav [data-page]")
@@ -657,11 +751,55 @@ function render() {
   if (editor) {
     editor.value = currentChapter()?.body || "";
     state.lastSavedWords = wordCount(editor.value);
+    const highlight = page.querySelector("#editor-highlight");
+    const updateHighlights = () => {
+      highlight.innerHTML = highlightedText(
+        editor.value,
+        state.project.characters,
+      );
+      highlight.scrollTop = editor.scrollTop;
+      highlight.scrollLeft = editor.scrollLeft;
+    };
+    updateHighlights();
+    editor.addEventListener("scroll", () => {
+      highlight.scrollTop = editor.scrollTop;
+      highlight.scrollLeft = editor.scrollLeft;
+    });
+    highlight.addEventListener("pointerover", (event) => {
+      const mention = event.target.closest(".character-mention");
+      if (!mention) return;
+      const character = state.project.characters.find(
+        (item) => item.id === mention.dataset.characterId,
+      );
+      if (character) showCharacterTooltip(character, event);
+    });
+    highlight.addEventListener("pointermove", (event) => {
+      if (event.target.closest(".character-mention")) {
+        const tooltip = document.querySelector("#character-tooltip");
+        tooltip.style.left = `${Math.min(event.clientX + 14, innerWidth - 270)}px`;
+        tooltip.style.top = `${Math.min(event.clientY + 16, innerHeight - 120)}px`;
+      }
+    });
+    highlight.addEventListener("pointerout", (event) => {
+      if (
+        event.target.closest(".character-mention") &&
+        !event.relatedTarget?.closest?.(".character-mention")
+      )
+        document.querySelector("#character-tooltip").hidden = true;
+    });
+    highlight.addEventListener("click", (event) => {
+      if (!event.target.closest(".character-mention")) return;
+      document.querySelector("#character-tooltip").hidden = true;
+    });
   }
   editor?.addEventListener("input", () => {
     const ch = currentChapter();
     if (!ch) return;
     ch.body = editor.value;
+    page.querySelector("#editor-highlight").innerHTML = highlightedText(
+      editor.value,
+      state.project.characters,
+    );
     const currentWords = wordCount(ch.body);
     page.querySelector("#word-count-live").textContent = format(currentWords);
     page.querySelector(".editor-status").lastElementChild.innerHTML = html`<b
@@ -916,6 +1054,11 @@ function editCharacterForm(ch = {}) {
             )
             .join("")}
         </select></label
+      ><label class="field"
+        >Markierungsfarbe<input
+          name="color"
+          type="color"
+          value="${characterColor(ch)}" /></label
       ><label class="field full"
         >Aliase, durch Kommas getrennt<input
           name="aliases"
@@ -963,6 +1106,16 @@ function editCharacterForm(ch = {}) {
         toast("Es gibt bereits eine Figur mit diesem Namen.");
         return false;
       }
+      const color = data.get("color").toLowerCase();
+      if (
+        state.project.characters.some(
+          (item) =>
+            item.id !== ch.id && characterColor(item).toLowerCase() === color,
+        )
+      ) {
+        toast("Bitte wähle eine eigene Markierungsfarbe.");
+        return false;
+      }
       let id = ch.id || slug(name);
       let suffix = 2;
       while (
@@ -986,6 +1139,7 @@ function editCharacterForm(ch = {}) {
           aliases: data.get("aliases"),
           description: data.get("description"),
           traits: data.get("traits"),
+          color,
           relationships,
           image: data.get("image"),
         });
@@ -1209,13 +1363,6 @@ document.addEventListener("click", async (event) => {
   else if (action === "save-now") {
     await saveCurrentChapter();
     toast("Kapitel gespeichert.");
-  } else if (action === "insert-wikilink") {
-    const editor = page.querySelector("#editor-text");
-    const name = button.dataset.name;
-    const start = editor.selectionStart;
-    editor.setRangeText(`[[${name}]]`, start, editor.selectionEnd, "end");
-    editor.dispatchEvent(new Event("input", { bubbles: true }));
-    editor.focus();
   } else if (action === "save-goal") {
     state.project = await api.saveSettings({
       goal: document.querySelector("#goal-input").value,
