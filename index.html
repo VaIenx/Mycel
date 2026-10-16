@@ -24,14 +24,23 @@
         </nav>
         <div class="top-actions">
           <button
+            id="settings-open"
+            class="icon-button settings-open"
+            data-page="settings"
+            title="Einstellungen"
+            aria-label="Einstellungen"
+          >
+            ⚙
+          </button>
+          <button
             id="project-search-open"
             class="icon-button search-open"
             title="Im Projekt suchen"
             aria-label="Im Projekt suchen"
-          >⌕</button>
-          <span id="project-pill" class="project-pill"
-            >Kein Projekt geöffnet</span
-          ><button
+          >
+            ⌕
+          </button>
+          <button
             id="open-project"
             class="icon-button"
             title="Projektordner öffnen"
@@ -49,13 +58,71 @@
       <dialog id="dialog" class="dialog"></dialog>
       <dialog id="search-dialog" class="dialog project-search-dialog">
         <div class="project-search-panel">
+          <div class="project-search-modes">
+            <button type="button" data-search-mode="find" class="active">
+              Suchen
+            </button>
+            <button type="button" data-search-mode="replace">Ersetzen</button>
+          </div>
           <label class="project-search-input-wrap">
             <span aria-hidden="true">⌕</span>
-            <input id="project-search-input" type="search" placeholder="Im gesamten Projekt suchen …" autocomplete="off" />
+            <input
+              id="project-search-input"
+              type="search"
+              placeholder="Im gesamten Projekt suchen …"
+              autocomplete="off"
+            />
             <kbd>Esc</kbd>
           </label>
+          <label class="project-replace-input-wrap" hidden>
+            <span aria-hidden="true">↳</span>
+            <input
+              id="project-replace-input"
+              type="text"
+              placeholder="Ersetzen durch …"
+              autocomplete="off"
+            />
+          </label>
           <div id="project-search-results" class="project-search-results"></div>
-          <div class="project-search-help">Kapitel, Figuren, Orte und Wissen</div>
+          <div class="project-search-actions">
+            <span id="project-search-count"
+              >Kapitel, Figuren, Orte und Wissen</span
+            >
+            <div>
+              <button
+                type="button"
+                class="button small"
+                data-search-nav="previous"
+                title="Vorheriger Treffer"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                class="button small"
+                data-search-nav="next"
+                title="Nächster Treffer"
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                class="button small"
+                data-replace-current
+                hidden
+              >
+                Ersetzen
+              </button>
+              <button
+                type="button"
+                class="button small primary"
+                data-replace-all
+                hidden
+              >
+                Alle ersetzen
+              </button>
+            </div>
+          </div>
         </div>
       </dialog>
     </div>

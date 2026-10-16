@@ -8,11 +8,43 @@ const state = {
   timer: null,
   lastSavedBody: "",
   saveTimer: null,
+  preferences: loadPreferences(),
+  searchMode: "find",
+  searchHitIndex: 0,
+  searchHits: [],
 };
 const page = document.querySelector("#page");
 const dialog = document.querySelector("#dialog");
 const searchDialog = document.querySelector("#search-dialog");
 const toastEl = document.querySelector("#toast");
+
+function loadPreferences() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("mycel-preferences") || "{}");
+    delete saved.theme;
+    return {
+      font: "sans",
+      size: "16",
+      spacing: "normal",
+      ...saved,
+    };
+  } catch {
+    return { font: "sans", size: "16", spacing: "normal" };
+  }
+}
+
+function applyPreferences() {
+  const root = document.documentElement;
+  root.dataset.font = state.preferences.font;
+  root.dataset.theme = "moss";
+  root.dataset.spacing = state.preferences.spacing;
+  root.style.setProperty("--text-size", `${state.preferences.size}px`);
+}
+
+function savePreferences() {
+  localStorage.setItem("mycel-preferences", JSON.stringify(state.preferences));
+  applyPreferences();
+}
 
 function html(strings, ...values) {
   return strings.reduce(
@@ -154,7 +186,6 @@ function emptyState(title, detail, buttonText, action) {
 }
 
 function renderWelcome() {
-  document.querySelector("#project-pill").textContent = "Kein Projekt geöffnet";
   page.innerHTML = html`<section class="welcome">
     <h1>Deine Geschichte<br />beginnt hier.</h1>
     <p>
@@ -205,6 +236,117 @@ function renderWelcome() {
         </section>`
       : ""}
   </section>`;
+}
+
+function renderSettings() {
+  const preference = state.preferences;
+  return html`${heading("Einstellungen")}
+    <div class="settings-page">
+      <section class="settings-section">
+        <div class="settings-section-heading">
+          <h2>Schrift</h2>
+          <p>
+            Stelle die Ansicht so ein, dass sie sich beim Schreiben angenehm
+            liest.
+          </p>
+        </div>
+        <label class="settings-row"
+          ><span
+            ><strong>Schriftgröße</strong
+            ><small>Passt Navigation, Notizen und Oberfläche an.</small></span
+          >
+          <select data-preference="size">
+            <option value="14" ${preference.size === "14" ? "selected" : ""}>
+              Klein
+            </option>
+            <option value="16" ${preference.size === "16" ? "selected" : ""}>
+              Mittel
+            </option>
+            <option value="18" ${preference.size === "18" ? "selected" : ""}>
+              Groß
+            </option>
+            <option value="20" ${preference.size === "20" ? "selected" : ""}>
+              Sehr groß
+            </option>
+          </select>
+        </label>
+        <label class="settings-row"
+          ><span
+            ><strong>Schriftart</strong
+            ><small
+              >Vier ruhige Schriftbilder für unterschiedliche Vorlieben.</small
+            ></span
+          >
+          <select data-preference="font">
+            <option
+              value="sans"
+              ${preference.font === "sans" ? "selected" : ""}
+            >
+              Inter
+            </option>
+            <option
+              value="humanist"
+              ${preference.font === "humanist" ? "selected" : ""}
+            >
+              Trebuchet MS
+            </option>
+            <option
+              value="serif"
+              ${preference.font === "serif" ? "selected" : ""}
+            >
+              Georgia
+            </option>
+            <option
+              value="mono"
+              ${preference.font === "mono" ? "selected" : ""}
+            >
+              Courier New
+            </option>
+          </select>
+        </label>
+        <label class="settings-row"
+          ><span
+            ><strong>Zeilenabstand</strong
+            ><small
+              >Mehr Luft zwischen Textzeilen erleichtert längeres Lesen.</small
+            ></span
+          >
+          <select data-preference="spacing">
+            <option
+              value="compact"
+              ${preference.spacing === "compact" ? "selected" : ""}
+            >
+              Kompakt
+            </option>
+            <option
+              value="normal"
+              ${preference.spacing === "normal" ? "selected" : ""}
+            >
+              Ausgewogen
+            </option>
+            <option
+              value="relaxed"
+              ${preference.spacing === "relaxed" ? "selected" : ""}
+            >
+              Locker
+            </option>
+          </select>
+        </label>
+      </section>
+      <section class="settings-section settings-preview">
+        <span class="settings-preview-label">Vorschau</span>
+        <p>
+          Deine Geschichte wächst mit jedem Satz. Passe Mycel an deinen
+          Schreibfluss an.
+        </p>
+      </section>
+      <div class="settings-reset-row">
+        <span>Du kannst alle Änderungen jederzeit zurücksetzen.</span
+        ><button class="button" data-action="reset-preferences">
+          Zurücksetzen
+        </button>
+      </div>
+    </div>`;
 }
 
 function renderHome() {
@@ -360,15 +502,8 @@ function renderChapters() {
         ＋ Kapitel
       </button>`,
     )}
-    <div class="tabs">
-      <button class="tab active">▤ &nbsp; Kapitel</button
-      ><button class="tab" data-page="characters">♧ &nbsp; Figuren</button>
-      <div class="tab-counts">
-        <div><small>KAPITEL</small><strong>${chapters.length}</strong></div>
-        <div>
-          <small>WÖRTER GESAMT</small><strong>${format(totalWords())}</strong>
-        </div>
-      </div>
+    <div class="collection-summary">
+      ${chapters.length} Kapitel · ${format(totalWords())} Wörter insgesamt
     </div>
     <div class="filterbar">
       <select class="select-like" id="volume-filter">
@@ -444,13 +579,7 @@ function renderCharacters() {
           ＋ Figur
         </button>`,
     )}
-    <div class="tabs">
-      <button class="tab" data-page="chapters">▤ &nbsp; Kapitel</button
-      ><button class="tab active">♧ &nbsp; Figuren</button>
-      <div class="tab-counts">
-        <div><small>FIGUREN GESAMT</small><strong>${list.length}</strong></div>
-      </div>
-    </div>
+    <div class="collection-summary">${list.length} Figuren</div>
     <div class="filterbar">
       <select class="select-like" id="role-filter">
         <option value="all">Rolle: Alle</option>
@@ -973,15 +1102,38 @@ function render() {
     .forEach((button) =>
       button.classList.toggle("active", button.dataset.page === state.page),
     );
-  if (!state.project) return renderWelcome();
-  document.querySelector("#project-pill").textContent = state.project.name;
-  if (state.page === "home") page.innerHTML = renderHome();
+  document
+    .querySelector("#settings-open")
+    .classList.toggle("active", state.page === "settings");
+  if (!state.project && state.page !== "settings") return renderWelcome();
+  if (state.page === "settings") page.innerHTML = renderSettings();
+  else if (state.page === "home") page.innerHTML = renderHome();
   else if (state.page === "chapters") page.innerHTML = renderChapters();
   else if (state.page === "characters") page.innerHTML = renderCharacters();
   else if (state.page === "places") page.innerHTML = renderPlaces();
   else if (state.page === "knowledge") page.innerHTML = renderKnowledge();
   else if (state.page === "writing") page.innerHTML = renderWriting();
-  else page.innerHTML = renderProgress();
+  else if (state.page === "progress") page.innerHTML = renderProgress();
+  if (state.page === "settings") {
+    page.querySelectorAll("[data-preference]").forEach((control) => {
+      control.addEventListener("change", () => {
+        state.preferences[control.dataset.preference] = control.value;
+        savePreferences();
+      });
+    });
+    page
+      .querySelector("[data-action=reset-preferences]")
+      .addEventListener("click", () => {
+        state.preferences = {
+          font: "sans",
+          size: "16",
+          spacing: "normal",
+        };
+        savePreferences();
+        render();
+        toast("Darstellung zurückgesetzt.");
+      });
+  }
   if (state.page === "chapters") {
     const search = page.querySelector("#chapter-search");
     const filter = page.querySelector("#volume-filter");
@@ -2227,48 +2379,280 @@ function projectSearchResults(query) {
     const index = text.toLocaleLowerCase("de-DE").indexOf(normalized);
     if (index < 0) return;
     const excerptStart = Math.max(0, index - 55);
-    const excerptText = text.slice(excerptStart, index + normalized.length + 90);
-    results.push({ kind, id, title, detail, excerpt: excerpt(excerptText, 150) });
+    const excerptText = text.slice(
+      excerptStart,
+      index + normalized.length + 90,
+    );
+    results.push({
+      kind,
+      id,
+      title,
+      detail,
+      excerpt: excerpt(excerptText, 150),
+    });
   };
   for (const chapter of state.project.chapters) {
-    add("chapter", chapter.id, chapter.title || "Kapitel", chapter.body || "", chapter.volume || "Band 1");
+    add(
+      "chapter",
+      chapter.id,
+      chapter.title || "Kapitel",
+      chapter.body || "",
+      chapter.volume || "Band 1",
+    );
   }
   for (const character of state.project.characters) {
-    add("character", character.id, character.name, `${character.description || ""} ${character.traits || ""} ${(character.aliases || []).join(" ")}`, character.role || "Figur");
+    add(
+      "character",
+      character.id,
+      character.name,
+      `${character.description || ""} ${character.traits || ""} ${(character.aliases || []).join(" ")}`,
+      character.role || "Figur",
+    );
   }
   for (const place of state.project.places) {
-    add("place", place.id, place.name, `${place.description || ""} ${(place.aliases || []).join(" ")}`, [place.category, place.continent, place.city].filter(Boolean).join(" · ") || "Ort");
+    add(
+      "place",
+      place.id,
+      place.name,
+      `${place.description || ""} ${(place.aliases || []).join(" ")}`,
+      [place.category, place.continent, place.city]
+        .filter(Boolean)
+        .join(" · ") || "Ort",
+    );
   }
   for (const entry of state.project.knowledge) {
-    add("knowledge", entry.id, entry.name, `${entry.description || ""} ${entry.traits || ""} ${(entry.aliases || []).join(" ")}`, entry.category || "Wissen");
+    add(
+      "knowledge",
+      entry.id,
+      entry.name,
+      `${entry.description || ""} ${entry.traits || ""} ${(entry.aliases || []).join(" ")}`,
+      entry.category || "Wissen",
+    );
   }
   return results.slice(0, 80);
 }
 
 function renderProjectSearch(query) {
   const resultsElement = document.querySelector("#project-search-results");
+  const replacing = state.searchMode === "replace";
+  const replacement = document.querySelector(".project-replace-input-wrap");
+  const replaceCurrent = document.querySelector("[data-replace-current]");
+  const replaceAll = document.querySelector("[data-replace-all]");
+  document
+    .querySelectorAll("[data-search-mode]")
+    .forEach((button) =>
+      button.classList.toggle(
+        "active",
+        button.dataset.searchMode === state.searchMode,
+      ),
+    );
+  replacement.hidden = !replacing;
+  replaceCurrent.hidden = !replacing;
+  replaceAll.hidden = !replacing;
+  document.querySelectorAll("[data-search-nav]").forEach((button) => {
+    button.disabled = !state.searchHits.length;
+  });
+  replaceCurrent.disabled = true;
+  replaceAll.disabled = true;
   if (!query.trim()) {
-    resultsElement.innerHTML = '<div class="project-search-empty">Suche in Kapiteln, Figuren, Orten und Wissen.</div>';
+    state.searchHits = [];
+    document.querySelectorAll("[data-search-nav]").forEach((button) => {
+      button.disabled = true;
+    });
+    resultsElement.innerHTML =
+      '<div class="project-search-empty">Suche in Kapiteln, Figuren, Orten und Wissen.</div>';
+    document.querySelector("#project-search-count").textContent =
+      "Kapitel, Figuren, Orte und Wissen";
     return;
   }
-  const results = projectSearchResults(query);
+  const manuscriptHits = searchManuscript(query);
+  state.searchHits = manuscriptHits;
+  document.querySelectorAll("[data-search-nav]").forEach((button) => {
+    button.disabled = !manuscriptHits.length;
+  });
+  if (state.searchHitIndex >= manuscriptHits.length) state.searchHitIndex = 0;
+  const results = replacing
+    ? [
+        ...manuscriptHits.map((hit, index) => ({
+          kind: "chapter",
+          id: hit.id,
+          title: hit.title,
+          detail: `${hit.volume} · Treffer ${index + 1}`,
+          excerpt: hit.excerpt,
+          index: hit.index,
+          hitIndex: index,
+        })),
+        ...projectSearchResults(query).filter(
+          (result) => result.kind !== "chapter",
+        ),
+      ].slice(0, 120)
+    : [
+        ...[
+          ...new Map(manuscriptHits.map((hit) => [hit.id, hit])).values(),
+        ].map((hit) => ({
+          kind: "chapter",
+          id: hit.id,
+          title: hit.title,
+          detail: `${hit.volume} · Manuskript`,
+          excerpt: hit.excerpt,
+          index: hit.index,
+        })),
+        ...projectSearchResults(query).filter(
+          (result) => result.kind !== "chapter",
+        ),
+      ].slice(0, 120);
+  document.querySelector("#project-search-count").textContent = replacing
+    ? `${manuscriptHits.length} Treffer im Manuskript${manuscriptHits.length ? ` · ${state.searchHitIndex + 1} von ${manuscriptHits.length}` : ""}`
+    : `${results.length} passende Einträge`;
+  const canReplace = replacing && manuscriptHits.length > 0;
+  replaceCurrent.disabled = !canReplace;
+  replaceAll.disabled = !canReplace;
   resultsElement.innerHTML = results.length
-    ? results.map((result) => html`<button class="project-search-result" data-search-kind="${result.kind}" data-id="${esc(result.id)}">
-        <span class="project-search-result-icon">${{ chapter: "▤", character: "♧", place: "⌖", knowledge: "◇" }[result.kind]}</span>
-        <span class="project-search-result-copy"><strong>${esc(result.title)}</strong><small>${esc(result.detail)} · ${esc({ chapter: "Kapitel", character: "Figur", place: "Ort", knowledge: "Wissen" }[result.kind])}</small><span>${esc(result.excerpt)}</span></span>
-      </button>`).join("")
+    ? results
+        .map(
+          (result) =>
+            html`<button
+              class="project-search-result"
+              data-search-kind="${result.kind}"
+              data-id="${esc(result.id)}"
+              data-search-index="${result.index ?? ""}"
+              data-hit-index="${result.hitIndex ?? ""}"
+              aria-current="${result.hitIndex === state.searchHitIndex
+                ? "true"
+                : "false"}"
+            >
+              <span class="project-search-result-icon"
+                >${{ chapter: "▤", character: "♧", place: "⌖", knowledge: "◇" }[
+                  result.kind
+                ]}</span
+              >
+              <span class="project-search-result-copy"
+                ><strong>${esc(result.title)}</strong
+                ><small
+                  >${esc(result.detail)} ·
+                  ${esc(
+                    {
+                      chapter: "Kapitel",
+                      character: "Figur",
+                      place: "Ort",
+                      knowledge: "Wissen",
+                    }[result.kind],
+                  )}</small
+                ><span>${esc(result.excerpt)}</span></span
+              >
+            </button>`,
+        )
+        .join("")
     : '<div class="project-search-empty">Keine passenden Treffer gefunden.</div>';
 }
 
-function openSearchResult(kind, id) {
+function searchManuscript(query) {
+  if (!query.trim() || !state.project) return [];
+  const expression = new RegExp(escapeRegex(query.trim()), "giu");
+  const hits = [];
+  for (const chapter of state.project.chapters) {
+    for (const match of chapter.body.matchAll(expression)) {
+      const index = match.index ?? 0;
+      hits.push({
+        id: chapter.id,
+        title: chapter.title || "Kapitel",
+        volume: chapter.volume || "Band 1",
+        index,
+        excerpt: excerpt(
+          chapter.body.slice(
+            Math.max(0, index - 55),
+            index + match[0].length + 90,
+          ),
+          150,
+        ),
+      });
+    }
+  }
+  return hits;
+}
+
+function setSearchHit(index, query) {
+  if (!state.searchHits.length) return;
+  state.searchHitIndex =
+    (index + state.searchHits.length) % state.searchHits.length;
+  renderProjectSearch(query);
+  document
+    .querySelector(
+      `.project-search-result[data-hit-index="${state.searchHitIndex}"]`,
+    )
+    ?.scrollIntoView({ block: "nearest" });
+}
+
+async function replaceSelectedMatch() {
+  const hit = state.searchHits[state.searchHitIndex];
+  const query = document.querySelector("#project-search-input").value.trim();
+  if (!hit || !query) return;
+  const chapter = state.project.chapters.find((item) => item.id === hit.id);
+  if (!chapter) return;
+  const replacement = document.querySelector("#project-replace-input").value;
+  chapter.body = `${chapter.body.slice(0, hit.index)}${replacement}${chapter.body.slice(hit.index + query.length)}`;
+  await persistReplacedChapters([chapter]);
+  toast("Treffer ersetzt.");
+  renderProjectSearch(query);
+}
+
+async function replaceAllMatches() {
+  const query = document.querySelector("#project-search-input").value.trim();
+  if (!query) return;
+  const replacement = document.querySelector("#project-replace-input").value;
+  const chapters = state.project.chapters.filter((chapter) =>
+    new RegExp(escapeRegex(query), "iu").test(chapter.body),
+  );
+  if (!chapters.length) return;
+  const expression = new RegExp(escapeRegex(query), "giu");
+  for (const chapter of chapters)
+    chapter.body = chapter.body.replace(expression, () => replacement);
+  await persistReplacedChapters(chapters);
+  toast(`${format(state.searchHits.length)} Treffer ersetzt.`);
+  state.searchHitIndex = 0;
+  renderProjectSearch(query);
+}
+
+async function persistReplacedChapters(chapters) {
+  const activeEditor = page.querySelector("#editor-text");
+  if (
+    activeEditor &&
+    !chapters.some((chapter) => chapter.id === state.activeChapter)
+  )
+    await saveCurrentChapter();
+  for (const chapter of chapters) {
+    if (activeEditor && chapter.id === state.activeChapter)
+      activeEditor.value = chapter.body;
+    const saved = await api.saveChapter({
+      ...chapter,
+      order: state.project.chapters.indexOf(chapter) + 1,
+    });
+    chapter.id = saved.id;
+    chapter.file = saved.file;
+    chapter.updated = new Date().toISOString();
+  }
+  state.project = await api.currentProject();
+  if (page.querySelector("#editor-text")) render();
+}
+
+function openSearchResult(kind, id, matchIndex = null) {
   searchDialog.close();
   if (kind === "chapter") {
     void saveCurrentChapter();
     state.activeChapter = id;
     setPage("writing");
+    if (matchIndex !== null) {
+      const editor = page.querySelector("#editor-text");
+      const length = document.querySelector("#project-search-input").value
+        .length;
+      editor?.focus();
+      editor?.setSelectionRange(matchIndex, matchIndex + length);
+    }
     return;
   }
-  setPage(({ character: "characters", place: "places", knowledge: "knowledge" })[kind]);
+  setPage(
+    { character: "characters", place: "places", knowledge: "knowledge" }[kind],
+  );
   openEntity(kind, id);
 }
 
@@ -2362,7 +2746,23 @@ async function removeRecentProject(root) {
 document.addEventListener("click", async (event) => {
   const searchResult = event.target.closest("[data-search-kind]");
   if (searchResult) {
-    openSearchResult(searchResult.dataset.searchKind, searchResult.dataset.id);
+    if (
+      state.searchMode === "replace" &&
+      searchResult.dataset.searchKind === "chapter" &&
+      searchResult.dataset.hitIndex !== ""
+    ) {
+      state.searchHitIndex = Number(searchResult.dataset.hitIndex);
+      renderProjectSearch(
+        document.querySelector("#project-search-input").value,
+      );
+      return;
+    }
+    const index = searchResult.dataset.searchIndex;
+    openSearchResult(
+      searchResult.dataset.searchKind,
+      searchResult.dataset.id,
+      index === "" ? null : Number(index),
+    );
     return;
   }
   const pageButton = event.target.closest("[data-page]");
@@ -2420,30 +2820,96 @@ document.addEventListener("click", async (event) => {
   }
 });
 
-document.querySelector("#project-search-open").addEventListener("click", () => {
+function openProjectSearch(mode = "find") {
   if (!state.project) {
     toast("Öffne zuerst ein Projekt.");
     return;
   }
-  searchDialog.showModal();
+  state.searchMode = mode;
+  if (!searchDialog.open) searchDialog.showModal();
   const input = document.querySelector("#project-search-input");
-  input.value = "";
-  renderProjectSearch("");
-  input.focus();
-});
-document.querySelector("#project-search-input").addEventListener("input", (event) => {
-  renderProjectSearch(event.currentTarget.value);
-});
-document.querySelector("#project-search-input").addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    const first = document.querySelector(".project-search-result");
-    if (first) openSearchResult(first.dataset.searchKind, first.dataset.id);
+  if (!input.value) {
+    const editor = page.querySelector("#editor-text");
+    const selection = editor?.value.slice(
+      editor.selectionStart,
+      editor.selectionEnd,
+    );
+    if (selection) input.value = selection;
   }
+  renderProjectSearch(input.value);
+  (mode === "replace"
+    ? document.querySelector("#project-replace-input")
+    : input
+  ).focus();
+}
+
+document
+  .querySelector("#project-search-open")
+  .addEventListener("click", () => openProjectSearch("find"));
+document.querySelectorAll("[data-search-mode]").forEach((button) => {
+  button.addEventListener("click", () =>
+    openProjectSearch(button.dataset.searchMode),
+  );
 });
+document
+  .querySelector("#project-search-input")
+  .addEventListener("input", (event) => {
+    state.searchHitIndex = 0;
+    renderProjectSearch(event.currentTarget.value);
+  });
+document
+  .querySelector("#project-replace-input")
+  .addEventListener("input", () => {
+    renderProjectSearch(document.querySelector("#project-search-input").value);
+  });
+document
+  .querySelector("#project-search-input")
+  .addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      if (state.searchMode === "replace") void replaceSelectedMatch();
+      else {
+        const first = document.querySelector(
+          '.project-search-result[data-search-kind="chapter"]',
+        );
+        if (first)
+          openSearchResult(
+            first.dataset.searchKind,
+            first.dataset.id,
+            Number(first.dataset.searchIndex),
+          );
+      }
+    }
+  });
+document.querySelectorAll("[data-search-nav]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const direction = button.dataset.searchNav === "next" ? 1 : -1;
+    const nextIndex =
+      (state.searchHitIndex + direction + state.searchHits.length) %
+      state.searchHits.length;
+    if (state.searchMode === "replace")
+      setSearchHit(
+        nextIndex,
+        document.querySelector("#project-search-input").value,
+      );
+    else {
+      const hit = state.searchHits[nextIndex];
+      if (hit) openSearchResult("chapter", hit.id, hit.index);
+    }
+  });
+});
+document
+  .querySelector("[data-replace-current]")
+  .addEventListener("click", () => void replaceSelectedMatch());
+document
+  .querySelector("[data-replace-all]")
+  .addEventListener("click", () => void replaceAllMatches());
 document.addEventListener("keydown", (event) => {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+  if (event.ctrlKey || event.metaKey) {
+    const key = event.key.toLowerCase();
+    if (!["k", "f", "h"].includes(key)) return;
     event.preventDefault();
-    document.querySelector("#project-search-open").click();
+    if (key === "h") openProjectSearch("replace");
+    else openProjectSearch("find");
   }
 });
 
@@ -2476,6 +2942,7 @@ document
   .querySelector("#open-project")
   .addEventListener("click", () => void openProject());
 document.querySelector("#new-project").addEventListener("click", createProject);
+applyPreferences();
 void Promise.all([api.currentProject(), api.recentProjects()]).then(
   ([project, recentProjects]) => {
     state.project = project;
