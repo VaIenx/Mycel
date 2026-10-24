@@ -1440,6 +1440,151 @@ select {
 .place-tools .search {
   margin-left: 0;
 }
+.place-tabs {
+  display: flex;
+  width: fit-content;
+  gap: 4px;
+  margin: -8px 0 20px;
+  padding: 4px;
+  border: 1px solid #bac9bc;
+  background: #e8eee5;
+}
+.place-tabs button {
+  min-width: 104px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.place-tabs button.active {
+  border-color: #bac9bc;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 2px 5px #243a3212;
+}
+.world-map-panel {
+  display: grid;
+  gap: 12px;
+}
+.world-map-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.world-map-toolbar p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.world-map-stage {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid #aebfac;
+  background:
+    linear-gradient(rgba(74, 103, 80, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74, 103, 80, 0.055) 1px, transparent 1px),
+    #e4ece1;
+  background-size: 18px 18px;
+  cursor: crosshair;
+}
+.world-map-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.world-map-marker {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  border: 2px solid #f4f3ea;
+  border-radius: 50% 50% 50% 2px;
+  background: var(--character-highlight, #d9e8ff);
+  color: var(--ink);
+  box-shadow: 0 2px 7px #17261d66;
+  rotate: -45deg;
+  cursor: pointer;
+}
+.world-map-marker span {
+  rotate: 45deg;
+  font-size: 17px;
+  line-height: 1;
+}
+.world-map-marker:hover {
+  z-index: 2;
+  scale: 1.14;
+}
+.world-map-empty {
+  display: grid;
+  min-height: 420px;
+  padding: 32px;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  border: 1px dashed #aebfac;
+  background:
+    linear-gradient(rgba(74, 103, 80, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74, 103, 80, 0.04) 1px, transparent 1px),
+    #edf2e8;
+  background-size: 18px 18px;
+  text-align: center;
+}
+.world-map-empty > span {
+  color: #65836c;
+  font-size: 42px;
+}
+.world-map-empty p {
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+.map-media-grid {
+  display: grid;
+  max-height: 52vh;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  overflow: auto;
+  margin: 12px 0;
+}
+.map-media-option {
+  display: grid;
+  grid-template-rows: 100px auto;
+  gap: 6px;
+  padding: 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #edf2e8;
+  cursor: pointer;
+}
+.map-media-option:has(input:checked) {
+  border-color: #6f9274;
+  box-shadow: 0 0 0 2px #6f927433;
+}
+.map-media-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.map-media-option img {
+  width: 100%;
+  height: 100px;
+  object-fit: contain;
+  background: #e2e9de;
+}
+.map-media-option span {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .place-card {
   min-height: 285px;
   padding: 0;

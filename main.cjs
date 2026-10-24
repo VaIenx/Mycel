@@ -270,6 +270,7 @@ async function readProject() {
     places,
     knowledge,
     goal: metadata.goal || 100000,
+    placeMap: metadata.placeMap || { image: "", markers: {} },
     chapterStatuses: metadata.chapterStatuses || [],
     chapterStatusColors: metadata.chapterStatusColors || {},
     history: metadata.history || [],
@@ -596,12 +597,44 @@ ${record.description}
     });
     return { id, file: "Places/" + id + ".md" };
   });
+  ipcMain.handle("place:map", async (_event, map) => {
+    const image = await mediaImageUrl(String(map.image || ""));
+    const markers = Object.fromEntries(
+      Object.entries(map.markers || {})
+        .filter(([id, marker]) => {
+          try {
+            safeId(id);
+            return (
+              Number.isFinite(Number(marker.x)) &&
+              Number.isFinite(Number(marker.y))
+            );
+          } catch {
+            return false;
+          }
+        })
+        .map(([id, marker]) => [
+          safeId(id),
+          {
+            x: Math.min(100, Math.max(0, Number(marker.x))),
+            y: Math.min(100, Math.max(0, Number(marker.y))),
+          },
+        ]),
+    );
+    await writeMetadata({ placeMap: { image, markers } });
+    return readProject();
+  });
   ipcMain.handle("place:delete", async (_event, idValue) => {
     const id = safeId(idValue);
     await fs.rm(insideProject("Places", id + ".md"), { force: true });
     const places = await readMetadataPart("places");
     delete places[id];
-    await writeMetadata({ places });
+    const placeMap = {
+      image: "",
+      markers: {},
+      ...(await readMetadataPart("placeMap")),
+    };
+    if (placeMap.markers) delete placeMap.markers[id];
+    await writeMetadata({ places, placeMap });
     return true;
   });
   ipcMain.handle("knowledge:save", async (_event, entry) => {

@@ -13,6 +13,7 @@ const state = {
   searchHitIndex: 0,
   searchHits: [],
   chapterView: localStorage.getItem("mycel-chapter-view") || "grid",
+  placeTab: localStorage.getItem("mycel-place-tab") || "list",
 };
 const page = document.querySelector("#page");
 const dialog = document.querySelector("#dialog");
@@ -718,13 +719,31 @@ function renderPlaces() {
   const cities = [...new Set(places.map(placeCity).filter(Boolean))].sort(
     (a, b) => a.localeCompare(b),
   );
-  return html`${heading(
-      "Orte",
-      html`<button class="button primary" data-action="new-place">
-        ＋ Ort
-      </button>`,
-    )}
-    <div class="place-tools">
+  const tabs = html`<div
+    class="place-tabs"
+    role="tablist"
+    aria-label="Ortsansicht"
+  >
+    <button
+      type="button"
+      role="tab"
+      aria-selected="${state.placeTab === "list"}"
+      class="${state.placeTab === "list" ? "active" : ""}"
+      data-place-tab="list"
+    >
+      Orte
+    </button>
+    <button
+      type="button"
+      role="tab"
+      aria-selected="${state.placeTab === "map"}"
+      class="${state.placeTab === "map" ? "active" : ""}"
+      data-place-tab="map"
+    >
+      Karte
+    </button>
+  </div>`;
+  const list = html`<div class="place-tools">
       <input class="search" id="place-search" placeholder="Ort suchen …" />
       <select class="select-like" id="place-category-filter">
         <option value="all">Alle Kategorien</option>
@@ -752,7 +771,6 @@ function renderPlaces() {
         <option value="continent">Kontinent</option>
         <option value="city">Stadt</option>
         <option value="region">Region</option>
-        <option value="hierarchy">Ortskette</option>
       </select>
     </div>
     <div class="grid" id="place-grid">
@@ -765,6 +783,171 @@ function renderPlaces() {
             "new-place",
           )}
     </div>`;
+  const map = renderPlaceMap(places);
+  return html`${heading(
+    "Orte",
+    html`<button class="button primary" data-action="new-place">
+      ＋ Ort
+    </button>`,
+  )}
+  ${tabs} ${state.placeTab === "map" ? map : list}`;
+}
+
+function renderPlaceMap(places) {
+  const map = state.project.placeMap || { image: "", markers: {} };
+  const markers = Object.entries(map.markers || {})
+    .map(([id, position]) => {
+      const place = places.find((item) => item.id === id);
+      if (!place) return "";
+      return html`<button
+        type="button"
+        class="world-map-marker"
+        data-map-place="${esc(id)}"
+        style="left: ${Number(position.x)}%; top: ${Number(
+          position.y,
+        )}%; --character-highlight: ${characterColor(place)}"
+        aria-label="${esc(place.name)}"
+      >
+        <span>⌖</span>
+      </button>`;
+    })
+    .join("");
+  return html`<section class="world-map-panel">
+    <div class="world-map-toolbar">
+      <p>Klicke auf die Karte, um einen Ort zu markieren.</p>
+      ${map.image
+        ? html`<button
+            type="button"
+            class="button small"
+            data-action="choose-world-map"
+          >
+            Karte wechseln
+          </button>`
+        : ""}
+    </div>
+    ${map.image
+      ? html`<div class="world-map-stage" data-world-map>
+          <img
+            class="world-map-image"
+            src="${esc(map.image)}"
+            alt="Weltkarte"
+          />
+          ${markers}
+        </div>`
+      : html`<div class="world-map-empty">
+          <span>⌖</span>
+          <strong>Noch keine Karte ausgewählt</strong>
+          <p>Wähle eine Karte aus deinem Medienordner als Grundlage.</p>
+          <button
+            type="button"
+            class="button primary"
+            data-action="choose-world-map"
+          >
+            Karte aus Medien auswählen
+          </button>
+        </div>`}
+  </section>`;
+}
+
+function renderMapMediaOptions(media, selected = "") {
+  return media.length
+    ? media
+        .map(
+          (item, index) =>
+            html`<label class="map-media-option">
+              <input
+                type="radio"
+                name="image"
+                value="${esc(item.url)}"
+                ${item.url === selected || (!selected && index === 0)
+                  ? "checked"
+                  : ""}
+                required
+              />
+              <img src="${esc(item.url)}" alt="" />
+              <span>${esc(item.name)}</span>
+            </label>`,
+        )
+        .join("")
+    : '<p class="quiet">Im Medienordner liegen noch keine Bilder.</p>';
+}
+
+async function chooseWorldMap() {
+  let media = await api.listMedia();
+  openDialog(
+    "Weltkarte auswählen",
+    html`<p class="quiet">
+        Wähle ein vorhandenes Bild oder füge eine Karte zum Medienordner hinzu.
+      </p>
+      <div class="map-media-grid" data-map-media-list>
+        ${renderMapMediaOptions(media, state.project.placeMap?.image)}
+      </div>
+      <button type="button" class="button small" data-map-upload>
+        Bild zum Medienordner hinzufügen …
+      </button>`,
+    async (data) => {
+      const image = data.get("image");
+      if (!image) {
+        toast("Bitte wähle eine Karte aus.");
+        return false;
+      }
+      state.project = await api.savePlaceMap({
+        ...(state.project.placeMap || {}),
+        image,
+      });
+      render();
+      toast("Weltkarte gespeichert.");
+    },
+    "Karte verwenden",
+  );
+  dialog
+    .querySelector("[data-map-upload]")
+    .addEventListener("click", async () => {
+      const image = await api.choosePlaceImage();
+      if (!image) return;
+      media = await api.listMedia();
+      dialog.querySelector("[data-map-media-list]").innerHTML =
+        renderMapMediaOptions(media, image);
+    });
+}
+
+function chooseMapPlace(x, y) {
+  const places = state.project.places || [];
+  if (!places.length) {
+    toast("Lege zuerst einen Ort an, den du auf der Karte markieren kannst.");
+    return;
+  }
+  const options = [...places]
+    .sort((a, b) => a.name.localeCompare(b.name, "de"))
+    .map(
+      (place) =>
+        html`<option value="${esc(place.id)}">
+          ${esc(place.name)} · ${esc(place.category || "Ort")}
+        </option>`,
+    )
+    .join("");
+  openDialog(
+    "Ort auf der Karte markieren",
+    html`<label class="field full"
+        >Ort<select name="place" required>
+          ${options}
+        </select></label
+      >
+      <p class="quiet">
+        Ein bereits markierter Ort wird an diese Stelle verschoben.
+      </p>`,
+    async (data) => {
+      const id = data.get("place");
+      const current = state.project.placeMap || { image: "", markers: {} };
+      state.project = await api.savePlaceMap({
+        ...current,
+        markers: { ...current.markers, [id]: { x, y } },
+      });
+      render();
+      toast("Ort auf der Karte markiert.");
+    },
+    "Ort markieren",
+  );
 }
 
 function knowledgeCard(entry) {
@@ -1196,7 +1379,44 @@ function render() {
     search?.addEventListener("input", apply);
     filter?.addEventListener("change", apply);
   }
-  if (state.page === "places") {
+  if (state.page === "places" && state.placeTab === "map") {
+    const mapStage = page.querySelector("[data-world-map]");
+    mapStage?.addEventListener("click", (event) => {
+      if (event.target.closest("[data-map-place]")) return;
+      const bounds = mapStage.getBoundingClientRect();
+      const x = Math.max(
+        0,
+        Math.min(100, ((event.clientX - bounds.left) / bounds.width) * 100),
+      );
+      const y = Math.max(
+        0,
+        Math.min(100, ((event.clientY - bounds.top) / bounds.height) * 100),
+      );
+      chooseMapPlace(x, y);
+    });
+    mapStage?.addEventListener("pointerover", (event) => {
+      const marker = event.target.closest("[data-map-place]");
+      if (!marker) return;
+      const place = state.project.places.find(
+        (item) => item.id === marker.dataset.mapPlace,
+      );
+      if (place) showEntityTooltip({ ...place, kind: "place" }, event);
+    });
+    mapStage?.addEventListener("pointermove", (event) => {
+      if (!event.target.closest("[data-map-place]")) return;
+      const tooltip = document.querySelector("#character-tooltip");
+      tooltip.style.left = `${Math.min(event.clientX + 14, innerWidth - 270)}px`;
+      tooltip.style.top = `${Math.min(event.clientY + 16, innerHeight - 120)}px`;
+    });
+    mapStage?.addEventListener("pointerout", (event) => {
+      if (
+        event.target.closest("[data-map-place]") &&
+        !event.relatedTarget?.closest?.("[data-map-place]")
+      )
+        document.querySelector("#character-tooltip").hidden = true;
+    });
+  }
+  if (state.page === "places" && state.placeTab === "list") {
     const search = page.querySelector("#place-search");
     const category = page.querySelector("#place-category-filter");
     const continent = page.querySelector("#place-continent-filter");
@@ -2740,6 +2960,21 @@ async function removeRecentProject(root) {
 }
 
 document.addEventListener("click", async (event) => {
+  const placeTab = event.target.closest("[data-place-tab]");
+  if (placeTab) {
+    state.placeTab = placeTab.dataset.placeTab;
+    localStorage.setItem("mycel-place-tab", state.placeTab);
+    render();
+    return;
+  }
+  const mapMarker = event.target.closest("[data-map-place]");
+  if (mapMarker) {
+    const place = state.project.places.find(
+      (item) => item.id === mapMarker.dataset.mapPlace,
+    );
+    if (place) openPlace(place);
+    return;
+  }
   const chapterViewButton = event.target.closest("[data-chapter-view]");
   if (chapterViewButton) {
     state.chapterView = chapterViewButton.dataset.chapterView;
@@ -2789,6 +3024,7 @@ document.addEventListener("click", async (event) => {
     if (ch) editChapterForm(ch);
   }
   if (action === "create-project") createProject();
+  else if (action === "choose-world-map") void chooseWorldMap();
   else if (action === "open-project") void openProject();
   else if (action === "open-recent-project")
     void openRecentProject(button.dataset.root);

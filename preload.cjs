@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld("mycel", {
   chooseCharacterImage: () => ipcRenderer.invoke("character:choose-image"),
   deleteCharacter: (id) => ipcRenderer.invoke("character:delete", id),
   savePlace: (place) => ipcRenderer.invoke("place:save", place),
+  savePlaceMap: (map) => ipcRenderer.invoke("place:map", map),
   choosePlaceImage: () => ipcRenderer.invoke("place:choose-image"),
   deletePlace: (id) => ipcRenderer.invoke("place:delete", id),
   saveKnowledge: (entry) => ipcRenderer.invoke("knowledge:save", entry),
