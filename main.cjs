@@ -167,6 +167,7 @@ async function readProject() {
           record.traits ||= parse(field("traits"), "");
           record.notes ||= parse(field("notes"), "");
           record.relationships ||= parse(field("relationships"), []);
+          record.wikiSections ||= parse(field("wikiSections"), []);
           record.description ||= body.slice(frontmatter[0].length).trim();
         }
         record.image = await mediaImageUrl(record.image);
@@ -200,6 +201,7 @@ async function readProject() {
           record.image ||= parse(field("image"), "");
           record.color ||= parse(field("color"), "");
           record.traits ||= parse(field("traits"), "");
+          record.wikiSections ||= parse(field("wikiSections"), []);
           record.description ||= body.slice(frontmatter[0].length).trim();
         }
         record.name ||= id;
@@ -211,6 +213,7 @@ async function readProject() {
         record.image ||= "";
         record.color ||= "";
         record.traits ||= "";
+        record.wikiSections ||= [];
         record.description ||= "";
         record.image = await mediaImageUrl(record.image);
       }
@@ -238,7 +241,9 @@ async function readProject() {
                 .map((alias) => alias.trim())
                 .filter(Boolean);
           record.color ||= parse(field("color"), "");
+          record.image ||= parse(field("image"), "");
           record.traits ||= parse(field("traits"), "");
+          record.wikiSections ||= parse(field("wikiSections"), []);
           record.relationships ||= parse(field("relationships"), []);
           record.description ||= body.slice(frontmatter[0].length).trim();
         }
@@ -246,9 +251,12 @@ async function readProject() {
         record.category ||= "Allgemein";
         record.aliases ||= [];
         record.color ||= "";
+        record.image ||= "";
         record.traits ||= "";
+        record.wikiSections ||= [];
         record.relationships ||= [];
         record.description ||= "";
+        record.image = await mediaImageUrl(record.image);
       }
       into.push({ id, file: folder + "/" + file.name, body, ...record });
     }
@@ -477,6 +485,14 @@ function registerIpc() {
       description: String(character.description || ""),
       traits: String(character.traits || ""),
       notes: String(character.notes || ""),
+      wikiSections: Array.isArray(character.wikiSections)
+        ? character.wikiSections
+            .filter((section) => section && section.title)
+            .map((section) => ({
+              title: String(section.title).trim(),
+              body: String(section.body || ""),
+            }))
+        : [],
       image,
       color: /^#[0-9a-f]{6}$/i.test(String(character.color || ""))
         ? String(character.color)
@@ -500,6 +516,7 @@ notes: ${JSON.stringify(record.notes)}
 image: ${JSON.stringify(record.image)}
 color: ${JSON.stringify(record.color)}
 relationships: ${JSON.stringify(record.relationships)}
+wikiSections: ${JSON.stringify(record.wikiSections)}
 ---
 
 ${record.description}
@@ -572,6 +589,14 @@ ${record.description}
       city: String(place.city || "").trim(),
       description: String(place.description || ""),
       traits: String(place.traits || ""),
+      wikiSections: Array.isArray(place.wikiSections)
+        ? place.wikiSections
+            .filter((section) => section && section.title)
+            .map((section) => ({
+              title: String(section.title).trim(),
+              body: String(section.body || ""),
+            }))
+        : [],
       image,
       color: /^#[0-9a-f]{6}$/i.test(String(place.color || ""))
         ? String(place.color)
@@ -587,6 +612,7 @@ city: ${JSON.stringify(record.city)}
 color: ${JSON.stringify(record.color)}
 traits: ${JSON.stringify(record.traits)}
 image: ${JSON.stringify(record.image)}
+wikiSections: ${JSON.stringify(record.wikiSections)}
 ---
 
 ${record.description}
@@ -641,6 +667,18 @@ ${record.description}
     const id = safeId(entry.id || entry.name);
     const file = insideProject("Knowledge", id + ".md");
     await fs.mkdir(path.dirname(file), { recursive: true });
+    let image = String(entry.image || "");
+    if (image.startsWith("file:")) {
+      try {
+        image = path
+          .relative(projectRoot, fileURLToPath(image))
+          .split(path.sep)
+          .join("/");
+      } catch {
+        image = "";
+      }
+    }
+    if (image.startsWith("../") || path.isAbsolute(image)) image = "";
     const record = {
       name: String(entry.name || "").trim(),
       category: String(entry.category || "Allgemein").trim(),
@@ -650,6 +688,15 @@ ${record.description}
         .filter(Boolean),
       description: String(entry.description || ""),
       traits: String(entry.traits || ""),
+      image,
+      wikiSections: Array.isArray(entry.wikiSections)
+        ? entry.wikiSections
+            .filter((section) => section && section.title)
+            .map((section) => ({
+              title: String(section.title).trim(),
+              body: String(section.body || ""),
+            }))
+        : [],
       color: /^#[0-9a-f]{6}$/i.test(String(entry.color || ""))
         ? String(entry.color)
         : "#d9e8ff",
@@ -678,6 +725,8 @@ aliases: ${JSON.stringify(record.aliases)}
 color: ${JSON.stringify(record.color)}
 traits: ${JSON.stringify(record.traits)}
 relationships: ${JSON.stringify(record.relationships)}
+wikiSections: ${JSON.stringify(record.wikiSections)}
+image: ${JSON.stringify(record.image)}
 ---
 
 ${record.description}

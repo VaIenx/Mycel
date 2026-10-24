@@ -19,6 +19,13 @@ const state = {
   )
     ? localStorage.getItem("mycel-writing-mode")
     : "normal",
+  wikiArticle: null,
+  wikiEditing: false,
+  wikiDraft: null,
+  wikiReturnPage: "home",
+  wikiReturnArticle: null,
+  wikiCategory: "all",
+  wikiSearch: "",
 };
 const page = document.querySelector("#page");
 const dialog = document.querySelector("#dialog");
@@ -620,7 +627,12 @@ function characterCard(ch) {
       <p>
         ${esc(
           excerpt(
-            ch.description || ch.traits || "Noch keine Beschreibung.",
+            ch.description ||
+              ch.traits ||
+              (ch.wikiSections || [])
+                .map((section) => section.body)
+                .join(" ") ||
+              "Noch keine Beschreibung.",
             95,
           ),
         )}
@@ -716,7 +728,12 @@ function placeCard(place) {
       <p>
         ${esc(
           excerpt(
-            place.description || place.traits || "Noch keine Beschreibung.",
+            place.description ||
+              place.traits ||
+              (place.wikiSections || [])
+                .map((section) => section.body)
+                .join(" ") ||
+              "Noch keine Beschreibung.",
             120,
           ),
         )}
@@ -983,6 +1000,13 @@ function knowledgeCard(entry) {
     data-action="open-knowledge"
     data-id="${esc(entry.id)}"
   >
+    ${entry.image
+      ? html`<img
+          class="knowledge-card-image"
+          src="${esc(entry.image)}"
+          alt=""
+        />`
+      : ""}
     <div class="knowledge-card-top">
       <span class="role-chip">${esc(entry.category || "Allgemein")}</span>
       <i style="--character-highlight: ${characterColor(entry)}"></i>
@@ -993,7 +1017,14 @@ function knowledgeCard(entry) {
           >${esc(entry.aliases.join(" · "))}</small
         >`
       : ""}
-    <p>${esc(entry.description || "Noch keine Beschreibung.")}</p>
+    <p>
+      ${esc(
+        entry.description ||
+          entry.traits ||
+          (entry.wikiSections || []).map((section) => section.body).join(" ") ||
+          "Noch keine Beschreibung.",
+      )}
+    </p>
     ${entry.relationships?.length
       ? html`<small class="knowledge-relations"
           >${entry.relationships.length} Verknüpfungen</small
@@ -1044,6 +1075,1082 @@ function renderKnowledge() {
             "new-knowledge",
           )}
     </div>`;
+}
+
+function wikiArticles() {
+  if (!state.project) return [];
+  const project = state.project;
+  const characters = project.characters.map((character) => ({
+    key: `character|${character.id}`,
+    kind: "character",
+    id: character.id,
+    title: character.name,
+    category: "Figuren",
+    aliases: character.aliases || [],
+    image: character.image || "",
+    facts: [
+      ["Rolle", character.role || "Nebenfigur"],
+      ["__properties:Eigenschaften", character.traits || ""],
+      ["Aliase", (character.aliases || []).join(", ") || "—"],
+    ],
+    sections: [
+      { title: "Beschreibung", body: character.description || "" },
+      { title: "Notizen", body: character.notes || "" },
+      ...(character.wikiSections || []),
+    ],
+    related: (character.relationships || [])
+      .map((relation) => {
+        const target = project.characters.find(
+          (item) => item.id === relation.target,
+        );
+        return target
+          ? {
+              kind: "character",
+              id: target.id,
+              title: target.name,
+              label: `${relation.bidirectional ? "↔" : "→"} ${relation.type || "Beziehung"}`,
+            }
+          : null;
+      })
+      .filter(Boolean),
+  }));
+  const places = project.places.map((place) => ({
+    key: `place|${place.id}`,
+    kind: "place",
+    id: place.id,
+    title: place.name,
+    category: "Orte",
+    aliases: place.aliases || [],
+    image: place.image || "",
+    facts: [
+      ["Kategorie", place.category || "Ort"],
+      ["Kontinent", place.continent || "—"],
+      ["Region", place.region || "—"],
+      ["Stadt", place.city || "—"],
+      ["Hierarchie", placePath(place) || "—"],
+      ["__properties:Notizen", place.traits || ""],
+      ["Aliase", (place.aliases || []).join(", ") || "—"],
+    ],
+    sections: [
+      { title: "Beschreibung", body: place.description || "" },
+      ...(place.wikiSections || []),
+    ],
+    related: [],
+  }));
+  const knowledge = project.knowledge.map((entry) => ({
+    key: `knowledge|${entry.id}`,
+    kind: "knowledge",
+    id: entry.id,
+    title: entry.name,
+    category: "Wissen",
+    aliases: entry.aliases || [],
+    image: entry.image || "",
+    facts: [
+      ["Kategorie", entry.category || "Allgemein"],
+      ["__properties:Eigenschaften und Notizen", entry.traits || ""],
+      ["Aliase", (entry.aliases || []).join(", ") || "—"],
+    ],
+    sections: [
+      { title: "Beschreibung", body: entry.description || "" },
+      ...(entry.wikiSections || []),
+    ],
+    related: (entry.relationships || [])
+      .map((relation) => {
+        const collection = {
+          character: project.characters,
+          place: project.places,
+          knowledge: project.knowledge,
+        }[relation.targetKind];
+        const target = collection?.find((item) => item.id === relation.target);
+        return target
+          ? {
+              kind: relation.targetKind,
+              id: target.id,
+              title: target.name,
+              label: relation.type || "Verknüpfung",
+            }
+          : null;
+      })
+      .filter(Boolean),
+  }));
+  return [...characters, ...places, ...knowledge];
+}
+
+function wikiInlinePlain(text, article, articles) {
+  const entries = new Map();
+  for (const target of articles) {
+    if (target.key === article.key) continue;
+    const names = [target.title, ...(target.aliases || [])];
+    for (const name of names) {
+      const value = String(name || "").trim();
+      if (!value || value.length < 2 || /^\d+$/.test(value)) continue;
+      const key = value.toLocaleLowerCase("de-DE");
+      if (!entries.has(key)) entries.set(key, { name: value, target });
+    }
+  }
+  const matches = [...entries.values()].sort(
+    (left, right) => right.name.length - left.name.length,
+  );
+  if (!matches.length) return esc(text);
+  const byName = new Map(
+    matches.map(({ name, target }) => [
+      name.toLocaleLowerCase("de-DE"),
+      target,
+    ]),
+  );
+  const expression = new RegExp(
+    `(?<![\\p{L}\\p{N}_])(?:${matches
+      .map(({ name }) => escapeRegex(name))
+      .join("|")})(?![\\p{L}\\p{N}_])`,
+    "giu",
+  );
+  let output = "";
+  let previous = 0;
+  for (const match of text.matchAll(expression)) {
+    output += esc(text.slice(previous, match.index));
+    const target = byName.get(match[0].toLocaleLowerCase("de-DE"));
+    output += `<a class="wiki-inline-link" href="#" data-wiki-open="${esc(
+      target.key,
+    )}">${esc(match[0])}</a>`;
+    previous = match.index + match[0].length;
+  }
+  return output + esc(text.slice(previous));
+}
+
+function wikiInline(text, article, articles) {
+  const expression =
+    /(\[[^\]]+\]\((?:https?:\/\/|mailto:)[^\s)]+\)|\*\*[^*]+\*\*|__[^_]+__|(?<!\*)\*[^*\n]+\*(?!\*)|(?<!_)_[^_\n]+_(?!_)|`[^`\n]+`)/g;
+  let output = "";
+  let previous = 0;
+  for (const match of text.matchAll(expression)) {
+    output += wikiInlinePlain(
+      text.slice(previous, match.index),
+      article,
+      articles,
+    );
+    const token = match[0];
+    if (token.startsWith("**") || token.startsWith("__")) {
+      output += `<strong>${wikiInline(
+        token.slice(2, -2),
+        article,
+        articles,
+      )}</strong>`;
+    } else if (token.startsWith("*") || token.startsWith("_")) {
+      output += `<em>${wikiInline(token.slice(1, -1), article, articles)}</em>`;
+    } else if (token.startsWith("`")) {
+      output += `<code>${esc(token.slice(1, -1))}</code>`;
+    } else {
+      const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      const url = link?.[2] || "";
+      if (/^(https?:\/\/|mailto:)/i.test(url))
+        output += `<a class="wiki-external-link" href="${esc(
+          url,
+        )}" target="_blank" rel="noopener noreferrer">${wikiInline(
+          link[1],
+          article,
+          articles,
+        )}</a>`;
+      else output += esc(token);
+    }
+    previous = match.index + token.length;
+  }
+  return output + wikiInlinePlain(text.slice(previous), article, articles);
+}
+
+function wikiText(text, article, articles) {
+  const source = String(text || "").trim();
+  if (!source)
+    return '<p class="wiki-empty-copy">Noch kein Inhalt vorhanden.</p>';
+  return source
+    .split(/\r?\n\s*\r?\n+/)
+    .map((block) => {
+      const value = block.trim();
+      if (!value) return "";
+      const imagePattern = /!\[([^\]]*)\]\(([^\s)]+)\)/g;
+      const images = [...value.matchAll(imagePattern)];
+      if (images.length) {
+        let previous = 0;
+        const content = [];
+        for (const image of images) {
+          const before = value.slice(previous, image.index).trim();
+          if (before)
+            content.push(
+              `<p>${wikiInline(before.replace(/\r?\n/g, " "), article, articles)}</p>`,
+            );
+          if (/^(?:file:|https?:)/i.test(image[2]))
+            content.push(
+              html`<figure class="wiki-inline-image">
+                <img src="${esc(image[2])}" alt="${esc(image[1])}" />
+                ${image[1]
+                  ? html`<figcaption>
+                      ${wikiInline(image[1], article, articles)}
+                    </figcaption>`
+                  : ""}
+              </figure>`,
+            );
+          else
+            content.push(`<p>${wikiInline(image[0], article, articles)}</p>`);
+          previous = image.index + image[0].length;
+        }
+        const after = value.slice(previous).trim();
+        if (after)
+          content.push(
+            `<p>${wikiInline(after.replace(/\r?\n/g, " "), article, articles)}</p>`,
+          );
+        return content.join("");
+      }
+      if (/^(?:-{3,}|\*\s+\*\s+\*)$/.test(value))
+        return '<hr class="wiki-scene-break" />';
+      const lines = value.split(/\r?\n/);
+      const heading = lines[0].trim().match(/^(#{1,3})\s*(.+)$/);
+      if (heading) {
+        const level = Math.min(4, heading[1].length + 1);
+        const body = lines
+          .slice(1)
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .join(" ");
+        return `<h${level}>${wikiInline(heading[2], article, articles)}</h${level}>${
+          body ? `<p>${wikiInline(body, article, articles)}</p>` : ""
+        }`;
+      }
+      const embeddedHeading = value.match(
+        /^([\s\S]*?)\s+(#{1,3})\s*(\S[^\r\n]*)$/,
+      );
+      if (embeddedHeading) {
+        const before = embeddedHeading[1].trim();
+        const level = Math.min(4, embeddedHeading[2].length + 1);
+        const title = embeddedHeading[3].trim();
+        const paragraph = before
+          ? `<p>${wikiInline(before, article, articles)}</p>`
+          : "";
+        return `${paragraph}<h${level}>${wikiInline(
+          title,
+          article,
+          articles,
+        )}</h${level}>`;
+      }
+      if (lines.every((line) => /^\s*[-*]\s+/.test(line)))
+        return `<ul>${lines
+          .map(
+            (line) =>
+              `<li>${wikiInline(line.replace(/^\s*[-*]\s+/, ""), article, articles)}</li>`,
+          )
+          .join("")}</ul>`;
+      if (lines.every((line) => /^\s*>\s?/.test(line)))
+        return `<blockquote>${wikiInline(
+          lines.map((line) => line.replace(/^\s*>\s?/, "")).join(" "),
+          article,
+          articles,
+        )}</blockquote>`;
+      return `<p>${wikiInline(lines.join(" "), article, articles)}</p>`;
+    })
+    .join("");
+}
+
+function wikiEntity(kind, id) {
+  const collection = {
+    character: state.project.characters,
+    place: state.project.places,
+    knowledge: state.project.knowledge,
+  }[kind];
+  return collection?.find((entry) => entry.id === id);
+}
+
+function openWikiEditor(kind, id) {
+  state.wikiReturnPage = state.page;
+  state.wikiReturnArticle = state.wikiArticle;
+  state.wikiDraft = null;
+  state.wikiArticle = `${kind}|${id}`;
+  state.wikiEditing = true;
+  state.page = "wiki";
+  render();
+}
+
+function startWikiEntry(kind) {
+  state.wikiReturnPage = state.page;
+  state.wikiReturnArticle = state.wikiArticle;
+  state.wikiDraft = {
+    kind,
+    entry: {
+      id: "",
+      name: "",
+      role: "Nebenfigur",
+      category: kind === "place" ? "Ort" : "Allgemein",
+      aliases: [],
+      relationships: [],
+      wikiSections: [],
+      color: characterColor({ id: "__wiki-draft__" }),
+      description: "",
+      traits: "",
+      notes: "",
+      image: "",
+    },
+  };
+  state.wikiArticle = `${kind}|draft`;
+  state.wikiEditing = true;
+  state.page = "wiki";
+  render();
+}
+
+function wikiEditSection(field, title, body) {
+  const editorBody = wikiEditorBodyParts(body);
+  return html`<section
+    class="wiki-edit-section"
+    data-wiki-field-section="${field}"
+  >
+    <label>${title}</label>
+    <div class="wiki-edit-toolbar">
+      <button type="button" data-wiki-format="bold">
+        <strong>Fett</strong>
+      </button>
+      <button type="button" data-wiki-format="italic"><em>Kursiv</em></button>
+      <button type="button" data-wiki-format="list">Liste</button>
+      <button type="button" data-wiki-insert-image>Bild</button>
+    </div>
+    <textarea
+      data-wiki-field="${field}"
+      data-wiki-images="${esc(JSON.stringify(editorBody.images))}"
+      placeholder="Text schreiben …"
+    >
+${esc(editorBody.text)}</textarea
+    >
+    ${wikiEditImagePreviews(editorBody.images)}
+  </section>`;
+}
+
+function wikiEditorBodyParts(body) {
+  const images = [];
+  const text = String(body || "").replace(
+    /!\[([^\]]*)\]\(([^\s)]+)\)/g,
+    (markdown, caption, url) => {
+      const marker = `⟦Bild: ${caption || "ohne Bildunterschrift"} · ${images.length + 1}⟧`;
+      images.push({ marker, caption, url });
+      return marker;
+    },
+  );
+  return { text, images };
+}
+
+function wikiEditorBody(textarea) {
+  let body = textarea.value;
+  const images = JSON.parse(textarea.dataset.wikiImages || "[]");
+  for (const image of images) {
+    const url = String(image.url).replace(/\(/g, "%28").replace(/\)/g, "%29");
+    const markdown = `![${image.caption}](${url})`;
+    body = body.replaceAll(image.marker, markdown);
+  }
+  return body;
+}
+
+function wikiEditImagePreviews(images) {
+  return images.length
+    ? html`<div class="wiki-edit-image-previews">
+        ${images.map(
+          (image) =>
+            html`<figure class="wiki-edit-image-preview">
+              <img src="${esc(image.url)}" alt="${esc(image.caption)}" />
+              <figcaption>
+                ${esc(image.caption || "Ohne Bildunterschrift")}
+              </figcaption>
+              <button
+                type="button"
+                class="button subtle"
+                data-wiki-remove-inline-image="${esc(image.marker)}"
+              >
+                Bild entfernen
+              </button>
+            </figure>`,
+        )}
+      </div>`
+    : "";
+}
+
+function addWikiEditorImage(textarea, image, start, end) {
+  const images = JSON.parse(textarea.dataset.wikiImages || "[]");
+  let number = images.length + 1;
+  let marker = `⟦Bild: ${image.caption || "ohne Bildunterschrift"} · ${number}⟧`;
+  while (images.some((item) => item.marker === marker)) {
+    number += 1;
+    marker = `⟦Bild: ${image.caption || "ohne Bildunterschrift"} · ${number}⟧`;
+  }
+  images.push({ ...image, marker });
+  textarea.dataset.wikiImages = JSON.stringify(images);
+  textarea.setRangeText(`\n\n${marker}\n\n`, start, end, "end");
+  textarea.parentElement.querySelector(".wiki-edit-image-previews")?.remove();
+  textarea.insertAdjacentHTML("afterend", wikiEditImagePreviews(images));
+  textarea.focus();
+}
+
+async function chooseWikiImage(textarea) {
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  let media = await api.listMedia();
+  dialog.className = "dialog";
+  openDialog(
+    "Bild in den Text einfügen",
+    html`<p class="quiet">
+        Das Bild wird rechts neben dem Text mit Bildunterschrift angezeigt.
+      </p>
+      <div class="map-media-grid" data-wiki-media-list>
+        ${renderMapMediaOptions(media)}
+      </div>
+      <label class="field full"
+        >Bildunterschrift<input
+          name="caption"
+          placeholder="Bildunterschrift eingeben …"
+        />
+      </label>
+      <button type="button" class="button small" data-wiki-image-upload>
+        Bild zum Medienordner hinzufügen …
+      </button>`,
+    (data) => {
+      const image = data.get("image");
+      if (!image) {
+        toast("Bitte wähle ein Bild aus dem Medienordner.");
+        return false;
+      }
+      const caption = String(data.get("caption") || "").replace(
+        /[\[\]\r\n]/g,
+        "",
+      );
+      addWikiEditorImage(textarea, { caption, url: String(image) }, start, end);
+      return true;
+    },
+    "Einfügen",
+  );
+  dialog
+    .querySelector("[data-wiki-image-upload]")
+    .addEventListener("click", async () => {
+      const image = await api.choosePlaceImage();
+      if (!image) return;
+      media = await api.listMedia();
+      dialog.querySelector("[data-wiki-media-list]").innerHTML =
+        renderMapMediaOptions(media, image);
+    });
+}
+
+function wikiEditProperty(label, field, value, type = "text") {
+  const id = `wiki-property-${field}`;
+  return html`<tr>
+    <th scope="row"><label for="${id}">${label}</label></th>
+    <td>
+      <input
+        id="${id}"
+        data-wiki-field="${field}"
+        type="${type}"
+        value="${esc(value || "")}"
+      />
+    </td>
+  </tr>`;
+}
+
+function wikiEditTextProperty(label, field, value) {
+  const properties = parseWikiProperties(value);
+  const rows = properties.length ? properties : [{ name: "", value: "" }];
+  return html`<tr class="wiki-property-heading">
+      <th colspan="2">${label}</th>
+    </tr>
+    <tr class="wiki-property-editor-row">
+      <td colspan="2">
+        <div class="wiki-property-editor" data-wiki-properties="${field}">
+          ${rows.map(wikiEditPropertyRow).join("")}
+        </div>
+        <button type="button" class="button" data-wiki-add-property="${field}">
+          ＋ Eigenschaft hinzufügen
+        </button>
+      </td>
+    </tr>`;
+}
+
+function parseWikiProperties(value) {
+  const source = String(value || "").trim();
+  if (!source) return [];
+  const cleanValue = (propertyValue) =>
+    propertyValue.trim().replace(/^[,\s]+|[,\s]+$/g, "");
+  const lines = source.split(/\r?\n/);
+  const lineProperties = [];
+  for (const line of lines) {
+    if (/^[,\s]*$/.test(line)) continue;
+    const match = line.match(/^\s*([\p{L}][^:\n]{0,31}):\s*(.*)$/u);
+    if (match)
+      lineProperties.push({
+        name: match[1].trim(),
+        value: cleanValue(match[2]),
+      });
+    else if (lineProperties.length)
+      lineProperties[lineProperties.length - 1].value += ` ${line.trim()}`;
+  }
+  if (
+    lineProperties.length &&
+    (lines.length > 1 || !source.includes(":", source.indexOf(":") + 1))
+  )
+    return lineProperties;
+  const labels = [
+    "Symbolpflanze",
+    "Kontrollwahn",
+    "Eigenschaften",
+    "Gewohnheiten",
+    "Temperament",
+    "Machtkontrolle",
+    "Haarfarbe",
+    "Augenfarbe",
+    "Schwächen",
+    "Stärken",
+    "Ängste",
+    "Größe",
+    "Alter",
+    "Rolle",
+  ];
+  const pattern = new RegExp(
+    `(?:^|\\s)(${labels.map(escapeRegex).join("|")}):\\s*`,
+    "giu",
+  );
+  const matches = [...source.matchAll(pattern)];
+  if (!matches.length) return [{ name: "", value: source }];
+  return matches.map((match, index) => ({
+    name: match[1].trim(),
+    value: cleanValue(
+      source.slice(
+        match.index + match[0].length,
+        matches[index + 1]?.index ?? source.length,
+      ),
+    ),
+  }));
+}
+
+function wikiEditPropertyRow(property = {}) {
+  return html`<div class="wiki-property-editor-item">
+    <input
+      data-property-name
+      value="${esc(property.name || "")}"
+      placeholder="Eigenschaft"
+    />
+    <span>:</span>
+    <input
+      data-property-value
+      value="${esc(property.value || "")}"
+      placeholder="Wert"
+    />
+    <button
+      type="button"
+      class="button subtle"
+      data-wiki-remove-property
+      aria-label="Eigenschaft entfernen"
+    >
+      ×
+    </button>
+  </div>`;
+}
+
+function wikiCustomSection(section = {}) {
+  const editorBody = wikiEditorBodyParts(section.body);
+  return html`<section class="wiki-edit-section wiki-edit-custom">
+    <div class="wiki-edit-section-heading">
+      <input
+        data-wiki-custom-title
+        value="${esc(section.title || "")}"
+        placeholder="Abschnittstitel"
+        aria-label="Abschnittstitel"
+      />
+      <button type="button" class="button subtle" data-wiki-remove-section>
+        Abschnitt entfernen
+      </button>
+    </div>
+    <div class="wiki-edit-toolbar">
+      <button type="button" data-wiki-format="bold">
+        <strong>Fett</strong>
+      </button>
+      <button type="button" data-wiki-format="italic"><em>Kursiv</em></button>
+      <button type="button" data-wiki-format="list">Liste</button>
+      <button type="button" data-wiki-insert-image>Bild</button>
+    </div>
+    <textarea
+      data-wiki-custom-body
+      data-wiki-images="${esc(JSON.stringify(editorBody.images))}"
+      placeholder="Text schreiben …"
+    >
+${esc(editorBody.text)}</textarea
+    >
+    ${wikiEditImagePreviews(editorBody.images)}
+  </section>`;
+}
+
+function wikiRelationEditor(kind, entry) {
+  if (kind === "character") {
+    const others = state.project.characters.filter(
+      (character) => character.id !== entry.id,
+    );
+    return (entry.relationships || [])
+      .map(
+        (relation) =>
+          html`<div class="wiki-edit-relation" data-wiki-relation>
+            <select data-relation-target aria-label="Verknüpfte Figur">
+              <option value="">Figur auswählen</option>
+              ${others
+                .map(
+                  (character) =>
+                    html`<option
+                      value="${esc(character.id)}"
+                      ${relation.target === character.id ? "selected" : ""}
+                    >
+                      ${esc(character.name)}
+                    </option>`,
+                )
+                .join("")}
+            </select>
+            <input
+              data-relation-type
+              value="${esc(relation.type || "")}"
+              placeholder="Beziehung"
+            />
+            <label
+              ><input
+                type="checkbox"
+                data-relation-bidirectional
+                ${relation.bidirectional ? "checked" : ""}
+              />Beidseitig</label
+            >
+            <button
+              type="button"
+              class="button subtle"
+              data-wiki-remove-relation
+            >
+              Entfernen
+            </button>
+          </div>`,
+      )
+      .join("");
+  }
+  if (kind === "knowledge")
+    return (entry.relationships || [])
+      .map(
+        (relation) =>
+          html`<div class="wiki-edit-relation" data-wiki-relation>
+            <select data-relation-target aria-label="Verknüpfter Eintrag">
+              <option value="">Eintrag auswählen</option>
+              ${knowledgeTargets(entry.id)
+                .map(
+                  (target) =>
+                    html`<option
+                      value="${esc(`${target.targetKind}:${target.id}`)}"
+                      ${relation.targetKind === target.targetKind &&
+                      relation.target === target.id
+                        ? "selected"
+                        : ""}
+                    >
+                      ${target.targetKind === "character"
+                        ? "Figur"
+                        : target.targetKind === "place"
+                          ? "Ort"
+                          : "Wissen"}
+                      · ${esc(target.name)}
+                    </option>`,
+                )
+                .join("")}
+            </select>
+            <input
+              data-relation-type
+              value="${esc(relation.type || "")}"
+              placeholder="Verknüpfung"
+            />
+            <button
+              type="button"
+              class="button subtle"
+              data-wiki-remove-relation
+            >
+              Entfernen
+            </button>
+          </div>`,
+      )
+      .join("");
+  return "";
+}
+
+function wikiEditor(selected) {
+  const draft = state.wikiDraft?.entry;
+  const entry = draft || wikiEntity(selected.kind, selected.id);
+  if (!entry) return "";
+  const propertyRows =
+    selected.kind === "character"
+      ? [
+          wikiEditProperty("Rolle", "role", entry.role || "Nebenfigur"),
+          wikiEditTextProperty("Eigenschaften", "traits", entry.traits),
+        ].join("")
+      : selected.kind === "place"
+        ? [
+            wikiEditProperty("Kategorie", "category", entry.category || "Ort"),
+            wikiEditProperty("Kontinent", "continent", entry.continent),
+            wikiEditProperty("Region", "region", entry.region),
+            wikiEditProperty("Stadt", "city", entry.city),
+            wikiEditTextProperty("Notizen", "traits", entry.traits),
+          ].join("")
+        : [
+            wikiEditProperty(
+              "Kategorie",
+              "category",
+              entry.category || "Allgemein",
+            ),
+            wikiEditTextProperty(
+              "Eigenschaften und Notizen",
+              "traits",
+              entry.traits,
+            ),
+          ].join("");
+  const contentFields =
+    selected.kind === "character"
+      ? [
+          wikiEditSection("description", "Beschreibung", entry.description),
+          wikiEditSection("notes", "Notizen", entry.notes),
+        ].join("")
+      : selected.kind === "place"
+        ? [
+            wikiEditSection("description", "Beschreibung", entry.description),
+          ].join("")
+        : [
+            wikiEditSection("description", "Beschreibung", entry.description),
+          ].join("");
+  const relations = wikiRelationEditor(selected.kind, entry);
+  const relationPanel =
+    selected.kind === "character" || selected.kind === "knowledge"
+      ? html`<section class="wiki-edit-panel">
+          <h2>
+            ${selected.kind === "character" ? "Beziehungen" : "Verknüpfungen"}
+          </h2>
+          <div class="wiki-edit-relations">${relations}</div>
+          <button type="button" class="button" data-wiki-add-relation>
+            ＋ ${selected.kind === "character" ? "Beziehung" : "Verknüpfung"}
+            hinzufügen
+          </button>
+        </section>`
+      : "";
+  return html`<form
+    class="wiki-editor"
+    id="wiki-editor-form"
+    data-kind="${selected.kind}"
+    data-id="${esc(entry.id || "")}"
+  >
+    <header class="wiki-editor-header">
+      <div>
+        <span class="wiki-eyebrow">${selected.category} · BEARBEITEN</span>
+        <input
+          class="wiki-edit-title"
+          data-wiki-field="name"
+          value="${esc(entry.name || selected.title)}"
+          aria-label="Name des Eintrags"
+          required
+        />
+      </div>
+      <div class="wiki-editor-actions">
+        <button type="button" class="button subtle" data-wiki-cancel>
+          Abbrechen
+        </button>
+        <button type="submit" class="button primary">Speichern</button>
+      </div>
+    </header>
+    <div class="wiki-edit-layout">
+      <div class="wiki-edit-content">
+        <section class="wiki-edit-panel">
+          <h2>Inhalt</h2>
+          ${contentFields}
+          <div class="wiki-edit-custom-list">
+            ${(entry.wikiSections || []).map(wikiCustomSection).join("")}
+          </div>
+          <button type="button" class="button" data-wiki-add-section>
+            ＋ Eigenen Abschnitt hinzufügen
+          </button>
+        </section>
+        ${relationPanel}
+      </div>
+      <aside class="wiki-edit-properties">
+        <h2>Eintrag</h2>
+        <div class="wiki-edit-image-box">
+          <span>Bild</span>
+          ${entry.image
+            ? html`<img
+                class="wiki-edit-image"
+                src="${esc(entry.image)}"
+                alt=""
+              />`
+            : html`<span class="small-note">Kein Bild ausgewählt</span>`}
+          <input
+            data-wiki-field="image"
+            type="hidden"
+            value="${esc(entry.image || "")}"
+          />
+          <div class="wiki-edit-image-actions">
+            <button type="button" class="button" data-wiki-image>
+              Bild aus Medien wählen
+            </button>
+            ${entry.image
+              ? html`<button
+                  type="button"
+                  class="button subtle"
+                  data-wiki-remove-image
+                >
+                  Entfernen
+                </button>`
+              : ""}
+          </div>
+        </div>
+        <table class="wiki-edit-table">
+          <tbody>
+            ${propertyRows}
+            ${wikiEditProperty(
+              "Aliase",
+              "aliases",
+              (entry.aliases || []).join(", "),
+            )}
+            ${wikiEditProperty(
+              "Markierungsfarbe",
+              "color",
+              characterColor(entry),
+              "color",
+            )}
+          </tbody>
+        </table>
+      </aside>
+    </div>
+  </form>`;
+}
+
+function renderWiki() {
+  const articles = wikiArticles();
+  const groups = [
+    ["character", "Figuren"],
+    ["place", "Orte"],
+    ["knowledge", "Wissen"],
+  ];
+  if (
+    state.wikiCategory !== "all" &&
+    !groups.some(([kind]) => kind === state.wikiCategory)
+  ) {
+    state.wikiCategory = "all";
+  }
+  const selected = state.wikiDraft
+    ? {
+        key: state.wikiArticle,
+        kind: state.wikiDraft.kind,
+        id: "",
+        title: state.wikiDraft.entry.name || "Neuer Eintrag",
+        category:
+          state.wikiDraft.kind === "character"
+            ? "Figuren"
+            : state.wikiDraft.kind === "place"
+              ? "Orte"
+              : "Wissen",
+      }
+    : articles.find((article) => article.key === state.wikiArticle);
+  const sidebar = html`<aside class="wiki-sidebar">
+    <div class="wiki-sidebar-title">Enzyklopädie</div>
+    <input
+      id="wiki-search"
+      class="search"
+      value="${esc(state.wikiSearch)}"
+      placeholder="Einträge suchen …"
+      aria-label="Enzyklopädie durchsuchen"
+    />
+    <nav class="wiki-categories" aria-label="Wiki-Kategorien">
+      <button
+        data-wiki-category="all"
+        class="${state.wikiCategory === "all" ? "active" : ""}"
+      >
+        Alle
+      </button>
+      ${groups
+        .map(
+          ([kind, label]) =>
+            html`<button
+              data-wiki-category="${kind}"
+              class="${state.wikiCategory === kind ? "active" : ""}"
+            >
+              ${label}
+            </button>`,
+        )
+        .join("")}
+    </nav>
+    <div class="wiki-index">
+      ${groups
+        .map(([kind, label]) => {
+          const entries = articles.filter((article) => article.kind === kind);
+          return entries.length
+            ? html`<section data-wiki-group="${kind}">
+                <h2>${label}</h2>
+                ${entries
+                  .map(
+                    (article) =>
+                      html`<button
+                        class="wiki-index-entry ${article.key ===
+                        state.wikiArticle
+                          ? "active"
+                          : ""}"
+                        data-wiki-open="${esc(article.key)}"
+                        data-wiki-kind="${kind}"
+                        data-wiki-title="${esc(
+                          `${article.title} ${(article.aliases || []).join(" ")}`.toLocaleLowerCase(
+                            "de-DE",
+                          ),
+                        )}"
+                      >
+                        ${esc(article.title)}
+                      </button>`,
+                  )
+                  .join("")}
+              </section>`
+            : "";
+        })
+        .join("")}
+      <p class="wiki-index-empty" hidden>Keine passenden Einträge.</p>
+    </div>
+  </aside>`;
+  if (selected && state.wikiEditing)
+    return html`<div class="wiki-layout">
+      ${sidebar}${wikiEditor(selected)}
+    </div>`;
+  if (!selected)
+    return html`<div class="wiki-layout">
+      ${sidebar}
+      <main class="wiki-welcome">
+        <span class="wiki-eyebrow">MYCEL · ENZYKLOPÄDIE</span>
+        <h1>Wissen, das zusammenwächst</h1>
+        <p>
+          Durchsuche Figuren, Orte und Wissen. Erkannte Namen und Aliase führen
+          direkt zu ihren Einträgen.
+        </p>
+        <div class="wiki-overview-grid">
+          ${groups
+            .map(([kind, label]) => {
+              const entries = articles.filter(
+                (article) => article.kind === kind,
+              );
+              return html`<section class="wiki-overview-group">
+                <h2>${label}</h2>
+                <p>${entries.length} Einträge</p>
+                <div>
+                  ${entries
+                    .slice(0, 6)
+                    .map(
+                      (article) =>
+                        html`<button data-wiki-open="${esc(article.key)}">
+                          ${esc(article.title)}
+                        </button>`,
+                    )
+                    .join("")}
+                </div>
+              </section>`;
+            })
+            .join("")}
+        </div>
+      </main>
+    </div>`;
+  const facts = selected.facts
+    .map(([label, value]) => {
+      if (label.startsWith("__properties:")) {
+        const title = label.slice("__properties:".length);
+        const properties = parseWikiProperties(value);
+        return html`<div class="wiki-infobox-properties">
+          <dt>${esc(title)}</dt>
+          <dd>
+            ${properties.length
+              ? html`<table>
+                  <tbody>
+                    ${properties.map(
+                      (property) =>
+                        html`<tr>
+                          <th>${esc(property.name)}</th>
+                          <td>
+                            ${wikiText(property.value, selected, articles)}
+                          </td>
+                        </tr>`,
+                    )}
+                  </tbody>
+                </table>`
+              : "—"}
+          </dd>
+        </div>`;
+      }
+      return html`<div>
+        <dt>${esc(label)}</dt>
+        <dd>${wikiText(value, selected, articles)}</dd>
+      </div>`;
+    })
+    .join("");
+  const image = selected.image
+    ? html`<img src="${esc(selected.image)}" alt="${esc(selected.title)}" />`
+    : "";
+  const sections = selected.sections
+    .filter((section) => section.body.trim())
+    .map(
+      (section, index) =>
+        html`<section class="wiki-section">
+          <h2>${esc(section.title)}</h2>
+          <div class="wiki-copy">
+            ${wikiText(section.body, selected, articles)}
+          </div>
+        </section>`,
+    )
+    .join("");
+  const related = selected.related.length
+    ? html`<section class="wiki-section">
+        <h2>Verknüpfungen</h2>
+        <div class="wiki-related-list">
+          ${selected.related
+            .map(
+              (relation) =>
+                html`<button
+                  data-wiki-open="${esc(`${relation.kind}|${relation.id}`)}"
+                >
+                  <span>${esc(relation.label)}</span>
+                  <strong>${esc(relation.title)}</strong>
+                </button>`,
+            )
+            .join("")}
+        </div>
+      </section>`
+    : "";
+  return html`<div class="wiki-layout">
+    ${sidebar}
+    <main class="wiki-article">
+      <div class="wiki-article-actions">
+        <span>${esc(selected.category)}</span>
+        <button
+          class="button subtle"
+          data-wiki-edit="${selected.kind}|${esc(selected.id)}"
+        >
+          Bearbeiten
+        </button>
+      </div>
+      <h1>${esc(selected.title)}</h1>
+      <div class="wiki-article-columns">
+        <div class="wiki-article-body">
+          ${sections ||
+          '<p class="wiki-empty-copy">Noch kein Inhalt vorhanden.</p>'}
+          ${related}
+        </div>
+        <aside class="wiki-infobox">
+          <h2>${esc(selected.title)}</h2>
+          ${image}
+          <dl>${facts}</dl>
+        </aside>
+      </div>
+    </main>
+  </div>`;
+}
+
+function applyWikiFilters() {
+  const query = state.wikiSearch.trim().toLocaleLowerCase("de-DE");
+  const entries = [...page.querySelectorAll(".wiki-index-entry")];
+  entries.forEach((entry) => {
+    entry.hidden =
+      (state.wikiCategory !== "all" &&
+        entry.dataset.wikiKind !== state.wikiCategory) ||
+      (query && !entry.dataset.wikiTitle.includes(query));
+  });
+  page.querySelectorAll("[data-wiki-group]").forEach((group) => {
+    group.hidden = !group.querySelector(".wiki-index-entry:not([hidden])");
+  });
+  const empty = page.querySelector(".wiki-index-empty");
+  if (empty) empty.hidden = entries.some((entry) => !entry.hidden);
 }
 
 function keepTypewriterLineInView(editor) {
@@ -1109,7 +2216,10 @@ function renderWriting() {
         ${esc(chapter.volume || "Band 1")} &nbsp;/&nbsp;
         <strong>${esc(chapter.title || chapter.id)}</strong>
       </div>
-      <div class="editor-tools toolbar" data-writing-mode="${state.writingMode}">
+      <div
+        class="editor-tools toolbar"
+        data-writing-mode="${state.writingMode}"
+      >
         <button data-format="undo" title="Rückgängig">↶</button
         ><button data-format="redo" title="Wiederholen">↷</button
         ><i class="editor-tools-sep"></i><button data-format="heading">H</button
@@ -1388,9 +2498,11 @@ function render() {
   document
     .querySelector("#settings-open")
     .classList.toggle("active", state.page === "settings");
-  if (!state.project && state.page !== "settings") return renderWelcome();
+  if (!state.project && state.page !== "settings" && state.page !== "wiki")
+    return renderWelcome();
   if (state.page === "settings") page.innerHTML = renderSettings();
   else if (state.page === "home") page.innerHTML = renderHome();
+  else if (state.page === "wiki") page.innerHTML = renderWiki();
   else if (state.page === "chapters") page.innerHTML = renderChapters();
   else if (state.page === "characters") page.innerHTML = renderCharacters();
   else if (state.page === "places") page.innerHTML = renderPlaces();
@@ -1398,6 +2510,7 @@ function render() {
   else if (state.page === "writing") page.innerHTML = renderWriting();
   else if (state.page === "progress") page.innerHTML = renderProgress();
   if (state.page === "chapters") applyChapterFilters();
+  if (state.page === "wiki") applyWikiFilters();
   if (state.page === "settings") {
     page.querySelectorAll("[data-preference]").forEach((control) => {
       const updatePreference = () => {
@@ -1730,8 +2843,13 @@ function render() {
         document.querySelector("#character-tooltip").hidden = true;
     });
     highlight.addEventListener("click", (event) => {
-      if (!event.target.closest(".character-mention")) return;
+      const mention = event.target.closest(".character-mention");
+      if (!mention) return;
+      event.preventDefault();
+      event.stopPropagation();
       document.querySelector("#character-tooltip").hidden = true;
+      state.wikiArticle = `${mention.dataset.action.replace("open-", "")}|${mention.dataset.id}`;
+      setPage("wiki");
     });
   }
   editor?.addEventListener("input", () => {
@@ -1935,231 +3053,6 @@ function createChapter() {
   editChapterForm();
 }
 
-function editCharacterForm(ch = {}) {
-  const editing = !!ch.id;
-  const others = state.project.characters.filter((item) => item.id !== ch.id);
-  const relationRows = (ch.relationships || [])
-    .map(
-      (rel) =>
-        html`<div class="relation-row">
-          <select name="relationTarget">
-            <option value="">Figur auswählen</option>
-            ${others
-              .map(
-                (item) =>
-                  html`<option
-                    value="${esc(item.id)}"
-                    ${rel.target === item.id ? "selected" : ""}
-                  >
-                    ${esc(item.name)}
-                  </option>`,
-              )
-              .join("")}</select
-          ><input
-            name="relationType"
-            value="${esc(rel.type || "")}"
-            placeholder="Beziehung"
-          /><label class="relation-bidirectional"
-            ><input
-              type="checkbox"
-              name="relationBidirectional"
-              ${rel.bidirectional ? "checked" : ""}
-            />Beidseitig</label
-          ><button
-            type="button"
-            class="button small"
-            data-remove-relation
-            aria-label="Beziehung entfernen"
-          >
-            ×
-          </button>
-        </div>`,
-    )
-    .join("");
-  const addRelationshipRow = (host) => {
-    const row = document.createElement("div");
-    row.className = "relation-row";
-    row.innerHTML = html`<select name="relationTarget">
-        <option value="">Figur auswählen</option>
-        ${others
-          .map(
-            (item) =>
-              html`<option value="${esc(item.id)}">${esc(item.name)}</option>`,
-          )
-          .join("")}</select
-      ><input name="relationType" placeholder="Beziehung" /><label
-        class="relation-bidirectional"
-        ><input type="checkbox" name="relationBidirectional" />Beidseitig</label
-      ><button
-        type="button"
-        class="button small"
-        data-remove-relation
-        aria-label="Beziehung entfernen"
-      >
-        ×
-      </button>`;
-    host.append(row);
-  };
-  openDialog(
-    editing ? "Figur bearbeiten" : "Neue Figur",
-    html`<div class="form-grid">
-      <label class="field"
-        >Name<input
-          name="name"
-          required
-          value="${esc(ch.name || "")}"
-          placeholder="Name der Figur" /></label
-      ><label class="field"
-        >Rolle<select name="role">
-          ${[
-            "Protagonist",
-            "Antagonist",
-            "Nebenfigur",
-            "Unterstützend",
-            "Neutral",
-          ]
-            .map(
-              (role) =>
-                html`<option ${ch.role === role ? "selected" : ""}>
-                  ${role}
-                </option>`,
-            )
-            .join("")}
-        </select></label
-      ><label class="field"
-        >Markierungsfarbe<input
-          name="color"
-          type="color"
-          value="${characterColor(ch)}" /></label
-      ><label class="field full"
-        >Aliase, durch Kommas getrennt<input
-          name="aliases"
-          value="${esc((ch.aliases || []).join(", "))}"
-          placeholder="Spitzname, Titel" /></label
-      ><label class="field full"
-        >Kurzbeschreibung<textarea
-          name="description"
-          placeholder="Wer ist diese Figur?"
-        ></textarea></label
-      ><label class="field full"
-        >Eigenschaften<textarea
-          name="traits"
-          placeholder="Ziele, Konflikte, Besonderheiten …"
-        ></textarea>
-      </label>
-      <label class="field full"
-        >Notizen<textarea
-          name="notes"
-          placeholder="Freie Notizen zur Figur …"
-        ></textarea>
-      </label>
-      <div class="field full">
-        <label>Beziehungen</label>
-        <div class="relation-list">${relationRows}</div>
-        ${others.length
-          ? '<button type="button" class="button small" data-add-relation>＋ Beziehung hinzufügen</button>'
-          : '<span class="small-note">Lege zuerst eine zweite Figur an.</span>'}
-      </div>
-      <div class="field full">
-        <label>Porträtbild</label
-        ><input
-          name="image"
-          value="${esc(ch.image || "")}"
-          placeholder="Noch kein Bild ausgewählt"
-          readonly
-        /><button type="button" class="button small" data-image>
-          Medien auswählen oder hinzufügen …
-        </button>
-      </div>
-    </div>`,
-    async (data) => {
-      const name = data.get("name").trim();
-      if (
-        [
-          ...state.project.characters
-            .filter((item) => item.id !== ch.id)
-            .map((item) => item.name),
-          ...state.project.places.map((item) => item.name),
-          ...state.project.knowledge.map((item) => item.name),
-        ].some(
-          (otherName) =>
-            otherName.trim().toLocaleLowerCase() === name.toLocaleLowerCase(),
-        )
-      ) {
-        toast("Es gibt bereits eine Figur mit diesem Namen.");
-        return false;
-      }
-      const color = data.get("color").toLowerCase();
-      if (
-        [
-          ...state.project.characters.filter((item) => item.id !== ch.id),
-          ...state.project.places,
-          ...state.project.knowledge,
-        ].some((item) => characterColor(item).toLowerCase() === color)
-      ) {
-        toast("Bitte wähle eine eigene Markierungsfarbe.");
-        return false;
-      }
-      let id = ch.id || slug(name);
-      let suffix = 2;
-      while (
-        !editing &&
-        state.project.characters.some((item) => item.id === id)
-      )
-        id = `${slug(name)}-${suffix++}`;
-      const relationships = [...dialog.querySelectorAll(".relation-row")]
-        .map((row) => ({
-          target: row.querySelector('[name="relationTarget"]').value,
-          type: row.querySelector('[name="relationType"]').value.trim(),
-          bidirectional: row.querySelector('[name="relationBidirectional"]')
-            .checked,
-        }))
-        .filter((rel) => rel.target && rel.type);
-      try {
-        await api.saveCharacter({
-          id,
-          name,
-          role: data.get("role"),
-          aliases: data.get("aliases"),
-          description: data.get("description"),
-          traits: data.get("traits"),
-          notes: data.get("notes"),
-          color,
-          relationships,
-          image: data.get("image"),
-        });
-      } catch (error) {
-        toast(
-          `Figur konnte nicht gespeichert werden: ${error.message || error}`,
-        );
-        return false;
-      }
-      state.project = await api.currentProject();
-      state.activeCharacter = id;
-      dialog.close();
-      toast(editing ? "Figur gespeichert." : "Figur erstellt.");
-      render();
-    },
-    editing ? "Änderungen speichern" : "Figur anlegen",
-  );
-  dialog.querySelector('[name="description"]').value = ch.description || "";
-  dialog.querySelector('[name="traits"]').value = ch.traits || "";
-  dialog.querySelector('[name="notes"]').value = ch.notes || "";
-  dialog
-    .querySelector("[data-add-relation]")
-    ?.addEventListener("click", () =>
-      addRelationshipRow(dialog.querySelector(".relation-list")),
-    );
-  dialog.querySelector(".relation-list").addEventListener("click", (event) => {
-    const remove = event.target.closest("[data-remove-relation]");
-    if (remove) remove.closest(".relation-row").remove();
-  });
-  dialog.querySelector("[data-image]").addEventListener("click", async () => {
-    const image = await api.chooseCharacterImage();
-    if (image) dialog.querySelector('input[name="image"]').value = image;
-  });
-}
-
 function openCharacter(ch) {
   state.activeCharacter = ch.id;
   const initials = String(ch.name || "?")
@@ -2211,14 +3104,25 @@ function openCharacter(ch) {
           </div>
         </div>
         <div class="detail-copy">
-          ${esc(ch.description || "Noch keine Beschreibung.")}
+          ${wikiEntityText(
+            "character",
+            ch,
+            ch.description || "Noch keine Beschreibung.",
+          )}
         </div>
         <h3>Eigenschaften</h3>
         <div class="detail-copy">
-          ${esc(ch.traits || "Noch keine Eigenschaften.")}
+          ${wikiEntityText(
+            "character",
+            ch,
+            ch.traits || "Noch keine Eigenschaften.",
+          )}
         </div>
         <h3>Notizen</h3>
-        <div class="detail-copy">${esc(ch.notes || "Noch keine Notizen.")}</div>
+        <div class="detail-copy">
+          ${wikiEntityText("character", ch, ch.notes || "Noch keine Notizen.")}
+        </div>
+        ${wikiEntitySections("character", ch)}
         <h3>Beziehungen</h3>
         <div class="relation-list">
           ${relationships ||
@@ -2228,7 +3132,7 @@ function openCharacter(ch) {
     </div>`,
     async () => {
       dialog.close();
-      setTimeout(() => editCharacterForm(ch), 0);
+      openWikiEditor("character", ch.id);
     },
     "Bearbeiten",
   );
@@ -2249,179 +3153,6 @@ function openCharacter(ch) {
   });
 }
 
-function editPlaceForm(place = {}) {
-  const editing = !!place.id;
-  openDialog(
-    editing ? "Ort bearbeiten" : "Neuer Ort",
-    html`<div class="form-grid">
-      <label class="field full"
-        >Name<input
-          name="name"
-          required
-          value="${esc(place.name || "")}"
-          placeholder="Name des Ortes" /></label
-      ><label class="field"
-        >Kategorie<select name="category">
-          ${[
-            "Kontinent",
-            "Land",
-            "Region",
-            "Stadt",
-            "Ort",
-            "Gebäude",
-            "Naturort",
-            "Sonstiges",
-          ]
-            .map(
-              (category) =>
-                html`<option
-                  ${(place.category || "Ort") === category ? "selected" : ""}
-                >
-                  ${category}
-                </option>`,
-            )
-            .join("")}
-        </select></label
-      ><label class="field"
-        >Markierungsfarbe<input
-          name="color"
-          type="color"
-          value="${characterColor(place)}"
-      /></label>
-      <label class="field"
-        >Kontinent<input
-          name="continent"
-          value="${esc(place.continent || "")}" /></label
-      ><label class="field"
-        >Region<input name="region" value="${esc(place.region || "")}" /></label
-      ><label class="field"
-        >Stadt<input name="city" value="${esc(place.city || "")}" /></label
-      ><label class="field full"
-        >Aliase, durch Kommas getrennt<input
-          name="aliases"
-          value="${esc((place.aliases || []).join(", "))}"
-          placeholder="Kurzname, frühere Namen"
-      /></label>
-      <div class="field full">
-        <label>Titelbild aus dem Medienordner</label>
-        <div class="place-image-preview" data-place-image-preview>
-          ${place.image
-            ? html`<img src="${esc(place.image)}" alt="" />`
-            : html`<span>Kein Bild ausgewählt</span>`}
-        </div>
-        <input type="hidden" name="image" value="${esc(place.image || "")}" />
-        <div class="place-image-actions">
-          <button type="button" class="button small" data-place-image>
-            Medien auswählen oder hinzufügen …
-          </button>
-          <button
-            type="button"
-            class="button small subtle"
-            data-remove-place-image
-          >
-            Bild entfernen
-          </button>
-        </div>
-      </div>
-      <label class="field full"
-        >Beschreibung<textarea
-          name="description"
-          placeholder="Was sollte man über diesen Ort wissen?"
-        ></textarea></label
-      ><label class="field full"
-        >Notizen<textarea
-          name="traits"
-          placeholder="Merkmale, Atmosphäre …"
-        ></textarea>
-      </label>
-    </div>`,
-    async (data) => {
-      const name = data.get("name").trim();
-      const nameKey = name.toLocaleLowerCase("de-DE");
-      const allNames = [
-        ...state.project.characters.map((item) => ({
-          ...item,
-          entityType: "character",
-        })),
-        ...state.project.places.map((item) => ({
-          ...item,
-          entityType: "place",
-        })),
-        ...state.project.knowledge.map((item) => ({
-          ...item,
-          entityType: "knowledge",
-        })),
-      ];
-      if (
-        allNames.some(
-          (item) =>
-            (item.entityType !== "place" || item.id !== place.id) &&
-            item.name.trim().toLocaleLowerCase("de-DE") === nameKey,
-        )
-      ) {
-        toast("Dieser Name wird bereits verwendet.");
-        return false;
-      }
-      const color = data.get("color").toLowerCase();
-      if (
-        allNames.some(
-          (item) =>
-            (item.entityType !== "place" || item.id !== place.id) &&
-            characterColor(item).toLowerCase() === color,
-        )
-      ) {
-        toast("Bitte wähle eine eigene Markierungsfarbe.");
-        return false;
-      }
-      let id = place.id || slug(name);
-      let suffix = 2;
-      while (!editing && state.project.places.some((item) => item.id === id))
-        id = `${slug(name)}-${suffix++}`;
-      try {
-        await api.savePlace({
-          id,
-          name,
-          category: data.get("category"),
-          continent: data.get("continent"),
-          region: data.get("region"),
-          city: data.get("city"),
-          aliases: data.get("aliases"),
-          description: data.get("description"),
-          traits: data.get("traits"),
-          image: data.get("image"),
-          color,
-        });
-      } catch (error) {
-        toast(`Ort konnte nicht gespeichert werden: ${error.message || error}`);
-        return false;
-      }
-      state.project = await api.currentProject();
-      dialog.close();
-      toast(editing ? "Ort gespeichert." : "Ort erstellt.");
-      render();
-    },
-    editing ? "Änderungen speichern" : "Ort anlegen",
-  );
-  dialog.querySelector('[name="description"]').value = place.description || "";
-  dialog.querySelector('[name="traits"]').value = place.traits || "";
-  dialog
-    .querySelector("[data-place-image]")
-    .addEventListener("click", async () => {
-      const image = await api.choosePlaceImage();
-      if (!image) return;
-      dialog.querySelector('[name="image"]').value = image;
-      dialog.querySelector("[data-place-image-preview]").innerHTML =
-        `<img src="${esc(image)}" alt="" />`;
-    });
-  dialog
-    .querySelector("[data-remove-place-image]")
-    .addEventListener("click", () => {
-      dialog.querySelector('[name="image"]').value = "";
-      dialog.querySelector("[data-place-image-preview]").innerHTML =
-        "<span>Kein Bild ausgewählt</span>";
-    });
-}
-
 function openPlace(place) {
   openDialog(
     place.name,
@@ -2439,15 +3170,22 @@ function openPlace(place) {
         <span>Stadt: ${esc(placeCity(place) || "—")}</span>
         <span>Aliase: ${esc((place.aliases || []).join(", ") || "—")}</span>
       </div>
-      <p class="detail-copy">
-        ${esc(place.description || "Noch keine Beschreibung.")}
-      </p>
+      <div class="detail-copy">
+        ${wikiEntityText(
+          "place",
+          place,
+          place.description || "Noch keine Beschreibung.",
+        )}
+      </div>
       <h3>Notizen</h3>
-      <div class="detail-copy">${esc(place.traits || "Keine Notizen.")}</div>
+      <div class="detail-copy">
+        ${wikiEntityText("place", place, place.traits || "Keine Notizen.")}
+      </div>
+      ${wikiEntitySections("place", place)}
     </div>`,
     async () => {
       dialog.close();
-      setTimeout(() => editPlaceForm(place), 0);
+      openWikiEditor("place", place.id);
     },
     "Bearbeiten",
   );
@@ -2478,192 +3216,6 @@ function knowledgeTargets(excludeId = "") {
   ].sort((a, b) => a.name.localeCompare(b.name, "de"));
 }
 
-function knowledgeRelationshipRow(relation, targets) {
-  const value = relation.targetKind
-    ? `${relation.targetKind}:${relation.target}`
-    : "";
-  return html`<div class="relation-row">
-    <select name="relationTarget">
-      <option value="">Eintrag auswählen</option>
-      ${targets
-        .map(
-          (target) =>
-            html`<option
-              value="${esc(`${target.targetKind}:${target.id}`)}"
-              ${value === `${target.targetKind}:${target.id}` ? "selected" : ""}
-            >
-              ${target.targetKind === "character"
-                ? "Figur"
-                : target.targetKind === "place"
-                  ? "Ort"
-                  : "Wissen"}
-              · ${esc(target.name)}
-            </option>`,
-        )
-        .join("")}
-    </select>
-    <input
-      name="relationType"
-      value="${esc(relation.type || "")}"
-      placeholder="Verknüpfung"
-    />
-    <button
-      type="button"
-      class="button small"
-      data-remove-relation
-      aria-label="Verknüpfung entfernen"
-    >
-      ×
-    </button>
-  </div>`;
-}
-
-function editKnowledgeForm(entry = {}) {
-  const editing = !!entry.id;
-  const targets = knowledgeTargets(entry.id);
-  const categories = [
-    "Allgemein",
-    "Rasse",
-    "Religion",
-    "Magie",
-    "Orden",
-    "Gegenstand",
-    "Sprache",
-    ...state.project.knowledge.map((item) => item.category),
-  ];
-  const relationRows = (entry.relationships || [])
-    .map((relation) => knowledgeRelationshipRow(relation, targets))
-    .join("");
-  openDialog(
-    editing ? "Wissen bearbeiten" : "Wissen anlegen",
-    html`<div class="form-grid">
-      <label class="field full"
-        >Name<input
-          name="name"
-          required
-          value="${esc(entry.name || "")}"
-          placeholder="Name des Eintrags" /></label
-      ><label class="field"
-        >Kategorie<input
-          name="category"
-          list="knowledge-category-options"
-          value="${esc(entry.category || "Allgemein")}"
-          placeholder="Eigene Kategorie"
-        />
-        <datalist id="knowledge-category-options">
-          ${[...new Set(categories)]
-            .map((category) => html`<option value="${esc(category)}"></option>`)
-            .join("")}
-        </datalist></label
-      ><label class="field"
-        >Markierungsfarbe<input
-          name="color"
-          type="color"
-          value="${characterColor(entry)}" /></label
-      ><label class="field full"
-        >Aliase, durch Kommas getrennt<input
-          name="aliases"
-          value="${esc((entry.aliases || []).join(", "))}"
-          placeholder="Andere Namen und Schreibweisen" /></label
-      ><label class="field full"
-        >Beschreibung<textarea
-          name="description"
-          placeholder="Was soll im Text erkannt und verknüpft werden?"
-        ></textarea></label
-      ><label class="field full"
-        >Eigenschaften und Notizen<textarea
-          name="traits"
-          placeholder="Hintergrund, Merkmale, Zusammenhänge …"
-        ></textarea>
-      </label>
-      <div class="field full">
-        <label>Verknüpfungen</label>
-        <div class="relation-list">${relationRows}</div>
-        <button type="button" class="button small" data-add-knowledge-relation>
-          ＋ Verknüpfung hinzufügen
-        </button>
-      </div>
-    </div>`,
-    async (data) => {
-      const name = data.get("name").trim();
-      const nameKey = name.toLocaleLowerCase("de-DE");
-      const allEntries = [
-        ...state.project.characters,
-        ...state.project.places,
-        ...state.project.knowledge.filter((item) => item.id !== entry.id),
-      ];
-      if (
-        allEntries.some(
-          (item) => item.name.trim().toLocaleLowerCase("de-DE") === nameKey,
-        )
-      ) {
-        toast("Dieser Name wird bereits verwendet.");
-        return false;
-      }
-      const color = data.get("color").toLowerCase();
-      if (
-        allEntries.some((item) => characterColor(item).toLowerCase() === color)
-      ) {
-        toast("Bitte wähle eine eigene Markierungsfarbe.");
-        return false;
-      }
-      let id = entry.id || slug(name);
-      let suffix = 2;
-      while (!editing && state.project.knowledge.some((item) => item.id === id))
-        id = `${slug(name)}-${suffix++}`;
-      const targets = data.getAll("relationTarget");
-      const types = data.getAll("relationType");
-      const relationships = targets
-        .map((target, index) => {
-          const [targetKind, ...targetId] = String(target).split(":");
-          return {
-            targetKind,
-            target: targetId.join(":"),
-            type: String(types[index] || "").trim(),
-          };
-        })
-        .filter((relation) => relation.target && relation.type);
-      try {
-        await api.saveKnowledge({
-          id,
-          name,
-          category: data.get("category").trim() || "Allgemein",
-          aliases: data.get("aliases"),
-          description: data.get("description"),
-          traits: data.get("traits"),
-          color,
-          relationships,
-        });
-      } catch (error) {
-        toast(
-          `Wissen konnte nicht gespeichert werden: ${error.message || error}`,
-        );
-        return false;
-      }
-      state.project = await api.currentProject();
-      dialog.close();
-      render();
-      toast(editing ? "Eintrag gespeichert." : "Eintrag erstellt.");
-    },
-    editing ? "Änderungen speichern" : "Eintrag anlegen",
-  );
-  dialog.querySelector('[name="description"]').value = entry.description || "";
-  dialog.querySelector('[name="traits"]').value = entry.traits || "";
-  const relationList = dialog.querySelector(".relation-list");
-  dialog
-    .querySelector("[data-add-knowledge-relation]")
-    .addEventListener("click", () => {
-      relationList.insertAdjacentHTML(
-        "beforeend",
-        knowledgeRelationshipRow({}, targets),
-      );
-    });
-  relationList.addEventListener("click", (event) => {
-    const remove = event.target.closest("[data-remove-relation]");
-    if (remove) remove.closest(".relation-row").remove();
-  });
-}
-
 function openKnowledge(entry) {
   const relationshipCards = (entry.relationships || [])
     .map((relation) => {
@@ -2688,15 +3240,35 @@ function openKnowledge(entry) {
     entry.name,
     html`<div class="knowledge-detail">
       <span class="role-chip">${esc(entry.category || "Allgemein")}</span>
-      <p>${esc(entry.description || "Noch keine Beschreibung.")}</p>
+      ${entry.image
+        ? html`<img
+            class="knowledge-detail-image"
+            src="${esc(entry.image)}"
+            alt="${esc(entry.name)}"
+          />`
+        : ""}
+      <div class="detail-copy">
+        ${wikiEntityText(
+          "knowledge",
+          entry,
+          entry.description || "Noch keine Beschreibung.",
+        )}
+      </div>
       <div>
         <h3>Aliase</h3>
         <p>${esc((entry.aliases || []).join(", ") || "Keine Aliase.")}</p>
       </div>
       <div>
         <h3>Eigenschaften und Notizen</h3>
-        <p>${esc(entry.traits || "Keine Notizen.")}</p>
+        <div class="detail-copy">
+          ${wikiEntityText(
+            "knowledge",
+            entry,
+            entry.traits || "Keine Notizen.",
+          )}
+        </div>
       </div>
+      ${wikiEntitySections("knowledge", entry)}
       <div>
         <h3>Verknüpfungen</h3>
         <div class="knowledge-related-list">
@@ -2707,7 +3279,7 @@ function openKnowledge(entry) {
     </div>`,
     async () => {
       dialog.close();
-      setTimeout(() => editKnowledgeForm(entry), 0);
+      openWikiEditor("knowledge", entry.id);
     },
     "Bearbeiten",
   );
@@ -2723,6 +3295,35 @@ function openKnowledge(entry) {
     render();
     toast("Eintrag gelöscht.");
   });
+}
+
+function wikiEntitySections(kind, entry) {
+  const sections = entry.wikiSections || [];
+  if (!sections.length) return "";
+  const articles = wikiArticles();
+  const article = articles.find(
+    (item) => item.kind === kind && item.id === entry.id,
+  );
+  if (!article) return "";
+  return sections
+    .map(
+      (section) =>
+        html`<section class="wiki-entity-section">
+          <h3>${esc(section.title)}</h3>
+          <div class="detail-copy">
+            ${wikiText(section.body, article, articles)}
+          </div>
+        </section>`,
+    )
+    .join("");
+}
+
+function wikiEntityText(kind, entry, text) {
+  const articles = wikiArticles();
+  const article = articles.find(
+    (item) => item.kind === kind && item.id === entry.id,
+  );
+  return article ? wikiText(text, article, articles) : esc(text);
 }
 
 function openEntity(kind, id, fromDialog = false) {
@@ -2780,7 +3381,7 @@ function projectSearchResults(query) {
       "character",
       character.id,
       character.name,
-      `${character.description || ""} ${character.traits || ""} ${(character.aliases || []).join(" ")}`,
+      `${character.description || ""} ${character.traits || ""} ${character.notes || ""} ${(character.wikiSections || []).map((section) => section.body).join(" ")} ${(character.aliases || []).join(" ")}`,
       character.role || "Figur",
     );
   }
@@ -2789,7 +3390,7 @@ function projectSearchResults(query) {
       "place",
       place.id,
       place.name,
-      `${place.description || ""} ${(place.aliases || []).join(" ")}`,
+      `${place.description || ""} ${place.traits || ""} ${(place.wikiSections || []).map((section) => section.body).join(" ")} ${(place.aliases || []).join(" ")}`,
       [place.category, place.continent, place.city]
         .filter(Boolean)
         .join(" · ") || "Ort",
@@ -2800,7 +3401,7 @@ function projectSearchResults(query) {
       "knowledge",
       entry.id,
       entry.name,
-      `${entry.description || ""} ${entry.traits || ""} ${(entry.aliases || []).join(" ")}`,
+      `${entry.description || ""} ${entry.traits || ""} ${(entry.wikiSections || []).map((section) => section.body).join(" ")} ${(entry.aliases || []).join(" ")}`,
       entry.category || "Wissen",
     );
   }
@@ -3123,6 +3724,266 @@ async function removeRecentProject(root) {
 }
 
 document.addEventListener("click", async (event) => {
+  const pageNavigation = event.target.closest("[data-page]");
+  if (pageNavigation && state.wikiEditing) {
+    toast("Speichere oder brich die Bearbeitung erst ab.");
+    return;
+  }
+  if (event.target.closest("[data-action^='new-']") && state.wikiEditing) {
+    toast("Speichere oder brich die Bearbeitung erst ab.");
+    return;
+  }
+  const wikiEditButton = event.target.closest("[data-wiki-edit]");
+  if (wikiEditButton) {
+    const [kind, ...idParts] = wikiEditButton.dataset.wikiEdit.split("|");
+    openWikiEditor(kind, idParts.join("|"));
+    return;
+  }
+  if (event.target.closest("[data-wiki-cancel]")) {
+    state.wikiEditing = false;
+    state.wikiDraft = null;
+    state.wikiArticle = state.wikiReturnArticle;
+    state.page = state.wikiReturnPage;
+    render();
+    return;
+  }
+  if (event.target.closest("[data-wiki-add-section]")) {
+    page
+      .querySelector(".wiki-edit-custom-list")
+      .insertAdjacentHTML("beforeend", wikiCustomSection());
+    page
+      .querySelector(".wiki-edit-custom:last-child [data-wiki-custom-title]")
+      ?.focus();
+    return;
+  }
+  const addWikiProperty = event.target.closest("[data-wiki-add-property]");
+  if (addWikiProperty) {
+    const field = addWikiProperty.dataset.wikiAddProperty;
+    const editor = page.querySelector(`[data-wiki-properties="${field}"]`);
+    editor.insertAdjacentHTML("beforeend", wikiEditPropertyRow());
+    editor.lastElementChild?.querySelector("[data-property-name]")?.focus();
+    return;
+  }
+  const removeWikiProperty = event.target.closest(
+    "[data-wiki-remove-property]",
+  );
+  if (removeWikiProperty) {
+    const editor = removeWikiProperty.closest("[data-wiki-properties]");
+    removeWikiProperty.closest(".wiki-property-editor-item").remove();
+    if (!editor.children.length)
+      editor.insertAdjacentHTML("beforeend", wikiEditPropertyRow());
+    return;
+  }
+  const removeWikiSection = event.target.closest("[data-wiki-remove-section]");
+  if (removeWikiSection) {
+    removeWikiSection.closest(".wiki-edit-custom").remove();
+    return;
+  }
+  const wikiImageButton = event.target.closest("[data-wiki-insert-image]");
+  if (wikiImageButton) {
+    const textarea = wikiImageButton
+      .closest(".wiki-edit-section")
+      .querySelector("textarea");
+    await chooseWikiImage(textarea);
+    return;
+  }
+  const removeInlineImage = event.target.closest(
+    "[data-wiki-remove-inline-image]",
+  );
+  if (removeInlineImage) {
+    const section = removeInlineImage.closest(".wiki-edit-section");
+    const textarea = section.querySelector("textarea");
+    const marker = removeInlineImage.dataset.wikiRemoveInlineImage;
+    textarea.value = textarea.value
+      .replaceAll(marker, "")
+      .replace(/\n{3,}/g, "\n\n");
+    textarea.dataset.wikiImages = JSON.stringify(
+      JSON.parse(textarea.dataset.wikiImages || "[]").filter(
+        (image) => image.marker !== marker,
+      ),
+    );
+    section.querySelector(".wiki-edit-image-previews")?.remove();
+    section
+      .querySelector("textarea")
+      .insertAdjacentHTML(
+        "afterend",
+        wikiEditImagePreviews(JSON.parse(textarea.dataset.wikiImages || "[]")),
+      );
+    return;
+  }
+  const wikiFormat = event.target.closest("[data-wiki-format]");
+  if (wikiFormat) {
+    const editor = wikiFormat.closest(".wiki-edit-section");
+    const textarea = editor.querySelector("textarea");
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = textarea.value.slice(start, end);
+    const format = wikiFormat.dataset.wikiFormat;
+    let before = "";
+    let after = "";
+    let value = selected || "Text";
+    if (format === "bold") [before, after] = ["**", "**"];
+    if (format === "italic") [before, after] = ["*", "*"];
+    if (format === "list") {
+      value = (selected || "Listeneintrag")
+        .split("\n")
+        .map((line) => `- ${line}`)
+        .join("\n");
+    }
+    const result = `${before}${value}${after}`;
+    textarea.setRangeText(result, start, end, "select");
+    textarea.focus();
+    return;
+  }
+  const addWikiRelation = event.target.closest("[data-wiki-add-relation]");
+  if (addWikiRelation) {
+    const kind = page.querySelector("#wiki-editor-form").dataset.kind;
+    const host = page.querySelector(".wiki-edit-relations");
+    const row = document.createElement("div");
+    row.className = "wiki-edit-relation";
+    row.dataset.wikiRelation = "";
+    if (kind === "character") {
+      const others = state.project.characters.filter(
+        (item) =>
+          item.id !== page.querySelector("#wiki-editor-form").dataset.id,
+      );
+      row.innerHTML = html`<select
+          data-relation-target
+          aria-label="Verknüpfte Figur"
+        >
+          <option value="">Figur auswählen</option>
+          ${others
+            .map(
+              (item) =>
+                html`<option value="${esc(item.id)}">
+                  ${esc(item.name)}
+                </option>`,
+            )
+            .join("")}
+        </select>
+        <input data-relation-type placeholder="Beziehung" />
+        <label
+          ><input
+            type="checkbox"
+            data-relation-bidirectional
+          />Beidseitig</label
+        >
+        <button type="button" class="button subtle" data-wiki-remove-relation>
+          Entfernen
+        </button>`;
+    } else {
+      row.innerHTML = html`<select
+          data-relation-target
+          aria-label="Verknüpfter Eintrag"
+        >
+          <option value="">Eintrag auswählen</option>
+          ${knowledgeTargets(page.querySelector("#wiki-editor-form").dataset.id)
+            .map(
+              (target) =>
+                html`<option
+                  value="${esc(`${target.targetKind}:${target.id}`)}"
+                >
+                  ${target.targetKind === "character"
+                    ? "Figur"
+                    : target.targetKind === "place"
+                      ? "Ort"
+                      : "Wissen"}
+                  · ${esc(target.name)}
+                </option>`,
+            )
+            .join("")}
+        </select>
+        <input data-relation-type placeholder="Verknüpfung" />
+        <button type="button" class="button subtle" data-wiki-remove-relation>
+          Entfernen
+        </button>`;
+    }
+    host.append(row);
+    return;
+  }
+  const removeWikiRelation = event.target.closest(
+    "[data-wiki-remove-relation]",
+  );
+  if (removeWikiRelation) {
+    removeWikiRelation.closest("[data-wiki-relation]").remove();
+    return;
+  }
+  if (event.target.closest("[data-wiki-image]")) {
+    const kind = page.querySelector("#wiki-editor-form").dataset.kind;
+    const image =
+      kind === "character"
+        ? await api.chooseCharacterImage()
+        : await api.choosePlaceImage();
+    if (!image) return;
+    const property = event.target.closest(".wiki-edit-property");
+    property.querySelector('[data-wiki-field="image"]').value = image;
+    let preview = property.querySelector(".wiki-edit-image");
+    if (!preview) {
+      preview = document.createElement("img");
+      preview.className = "wiki-edit-image";
+      preview.alt = "";
+      property.insertBefore(
+        preview,
+        property.querySelector("input[type=hidden]"),
+      );
+    }
+    preview.src = image;
+    let remove = property.querySelector("[data-wiki-remove-image]");
+    if (!remove) {
+      remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "button subtle";
+      remove.dataset.wikiRemoveImage = "";
+      remove.textContent = "Entfernen";
+      property.querySelector(".wiki-edit-image-actions").append(remove);
+    }
+    return;
+  }
+  if (event.target.closest("[data-wiki-remove-image]")) {
+    const property = event.target.closest(".wiki-edit-property");
+    property.querySelector('[data-wiki-field="image"]').value = "";
+    property.querySelector(".wiki-edit-image")?.remove();
+    event.target.closest("[data-wiki-remove-image]").remove();
+    return;
+  }
+  const newEntry = event.target.closest("[data-action^='new-']");
+  if (newEntry) {
+    const kind = {
+      "new-character": "character",
+      "new-place": "place",
+      "new-knowledge": "knowledge",
+    }[newEntry.dataset.action];
+    if (kind) {
+      startWikiEntry(kind);
+      return;
+    }
+  }
+  const wikiCategory = event.target.closest("[data-wiki-category]");
+  if (wikiCategory) {
+    state.wikiCategory = wikiCategory.dataset.wikiCategory;
+    page
+      .querySelectorAll("[data-wiki-category]")
+      .forEach((button) =>
+        button.classList.toggle(
+          "active",
+          button.dataset.wikiCategory === state.wikiCategory,
+        ),
+      );
+    applyWikiFilters();
+    return;
+  }
+  const wikiLink = event.target.closest("[data-wiki-open]");
+  if (wikiLink) {
+    event.preventDefault();
+    if (state.wikiEditing) {
+      toast("Speichere oder brich die Bearbeitung erst ab.");
+      return;
+    }
+    state.wikiArticle = wikiLink.dataset.wikiOpen;
+    if (state.page !== "wiki") state.page = "wiki";
+    render();
+    return;
+  }
   const placeTab = event.target.closest("[data-place-tab]");
   if (placeTab) {
     state.placeTab = placeTab.dataset.placeTab;
@@ -3194,9 +4055,9 @@ document.addEventListener("click", async (event) => {
   else if (action === "remove-recent-project")
     void removeRecentProject(button.dataset.root);
   else if (action === "new-chapter") createChapter();
-  else if (action === "new-character") editCharacterForm();
-  else if (action === "new-place") editPlaceForm();
-  else if (action === "new-knowledge") editKnowledgeForm();
+  else if (action === "new-character") startWikiEntry("character");
+  else if (action === "new-place") startWikiEntry("place");
+  else if (action === "new-knowledge") startWikiEntry("knowledge");
   else if (action === "write-chapter") {
     void saveCurrentChapter();
     state.activeChapter = button.dataset.id;
@@ -3223,6 +4084,139 @@ document.addEventListener("click", async (event) => {
 });
 document.addEventListener("input", (event) => {
   if (event.target.matches("#chapter-search")) applyChapterFilters();
+  if (event.target.matches("#wiki-search")) {
+    state.wikiSearch = event.target.value;
+    applyWikiFilters();
+  }
+});
+document.addEventListener("submit", async (event) => {
+  const form = event.target.closest("#wiki-editor-form");
+  if (!form) return;
+  event.preventDefault();
+  const kind = form.dataset.kind;
+  const existingId = form.dataset.id;
+  const value = (name) => {
+    const field = form.querySelector(`[data-wiki-field="${name}"]`);
+    if (!field) return "";
+    return field instanceof HTMLTextAreaElement
+      ? wikiEditorBody(field)
+      : field.value || "";
+  };
+  const traits = [...form.querySelectorAll("[data-wiki-properties]")]
+    .flatMap((editor) =>
+      [...editor.querySelectorAll(".wiki-property-editor-item")].map((row) => ({
+        name: row.querySelector("[data-property-name]").value.trim(),
+        value: row.querySelector("[data-property-value]").value.trim(),
+      })),
+    )
+    .filter((property) => property.name || property.value)
+    .map((property) =>
+      property.name ? `${property.name}: ${property.value}` : property.value,
+    )
+    .join("\n");
+  const name = value("name").trim();
+  if (!name) {
+    toast("Gib dem Eintrag einen Namen.");
+    return;
+  }
+  const entities = [
+    ...state.project.characters.map((item) => ({ ...item, kind: "character" })),
+    ...state.project.places.map((item) => ({ ...item, kind: "place" })),
+    ...state.project.knowledge.map((item) => ({ ...item, kind: "knowledge" })),
+  ];
+  const nameKey = name.toLocaleLowerCase("de-DE");
+  if (
+    entities.some(
+      (item) =>
+        !(item.kind === kind && item.id === existingId) &&
+        item.name.trim().toLocaleLowerCase("de-DE") === nameKey,
+    )
+  ) {
+    toast("Dieser Name wird bereits verwendet.");
+    return;
+  }
+  const color = value("color").toLowerCase();
+  if (
+    entities.some(
+      (item) =>
+        !(item.kind === kind && item.id === existingId) &&
+        characterColor(item).toLowerCase() === color,
+    )
+  ) {
+    toast("Bitte wähle eine eigene Markierungsfarbe.");
+    return;
+  }
+  const sections = [...form.querySelectorAll(".wiki-edit-custom")]
+    .map((section) => ({
+      title: section.querySelector("[data-wiki-custom-title]").value.trim(),
+      body: wikiEditorBody(section.querySelector("[data-wiki-custom-body]")),
+    }))
+    .filter((section) => section.title);
+  let id = existingId || slug(name);
+  let suffix = 2;
+  const collection = {
+    character: state.project.characters,
+    place: state.project.places,
+    knowledge: state.project.knowledge,
+  }[kind];
+  while (!existingId && collection.some((item) => item.id === id))
+    id = `${slug(name)}-${suffix++}`;
+  const record = {
+    id,
+    name,
+    aliases: value("aliases"),
+    color,
+    image: value("image"),
+    description: value("description"),
+    traits,
+    wikiSections: sections,
+  };
+  if (kind === "character") {
+    record.role = value("role");
+    record.notes = value("notes");
+    record.relationships = [...form.querySelectorAll("[data-wiki-relation]")]
+      .map((row) => ({
+        target: row.querySelector("[data-relation-target]").value,
+        type: row.querySelector("[data-relation-type]").value.trim(),
+        bidirectional: row.querySelector("[data-relation-bidirectional]")
+          .checked,
+      }))
+      .filter((relation) => relation.target && relation.type);
+  }
+  if (kind === "place") {
+    record.category = value("category");
+    record.continent = value("continent");
+    record.region = value("region");
+    record.city = value("city");
+  }
+  if (kind === "knowledge") {
+    record.category = value("category");
+    record.relationships = [...form.querySelectorAll("[data-wiki-relation]")]
+      .map((row) => {
+        const [targetKind, ...targetId] = row
+          .querySelector("[data-relation-target]")
+          .value.split(":");
+        return {
+          targetKind,
+          target: targetId.join(":"),
+          type: row.querySelector("[data-relation-type]").value.trim(),
+        };
+      })
+      .filter((relation) => relation.target && relation.type);
+  }
+  try {
+    if (kind === "character") await api.saveCharacter(record);
+    else if (kind === "place") await api.savePlace(record);
+    else await api.saveKnowledge(record);
+    state.project = await api.currentProject();
+    state.wikiDraft = null;
+    state.wikiArticle = `${kind}|${id}`;
+    state.wikiEditing = false;
+    render();
+    toast("Eintrag gespeichert.");
+  } catch (error) {
+    toast(`Eintrag konnte nicht gespeichert werden: ${error.message || error}`);
+  }
 });
 document.addEventListener("change", (event) => {
   if (event.target.matches("#volume-filter")) applyChapterFilters();
