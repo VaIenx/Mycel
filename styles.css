@@ -1958,7 +1958,7 @@ select {
 .settings-preview p {
   margin: 12px 0 0;
   font-size: var(--text-size);
-  line-height: var(--reading-line, 1.65);
+  line-height: var(--reading-line, 27px);
 }
 .settings-reset-row {
   display: flex;
@@ -1982,21 +1982,34 @@ html[data-font="sans"] {
   --ui-font: Inter;
   --writing-font: Inter, "Segoe UI", sans-serif;
 }
-html[data-spacing="compact"] {
-  --reading-line: 1.45;
-}
-html[data-spacing="normal"] {
-  --reading-line: 1.7;
-}
-html[data-spacing="relaxed"] {
-  --reading-line: 1.95;
-}
 .editor-text,
 .editor-highlight {
   font:
-    var(--text-size, 16px) / var(--reading-line, 1.7)
+    var(--text-size, 16px) / var(--reading-line, 27px)
       var(--writing-font, Georgia),
     serif;
+}
+.preference-px-control {
+  display: flex;
+  min-width: min(340px, 48%);
+  align-items: center;
+  gap: 9px;
+}
+.preference-px-control input[type="range"] {
+  width: 100%;
+  accent-color: #607f65;
+}
+.preference-px-control input[type="number"] {
+  width: 72px;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--paper);
+  text-align: center;
+}
+.preference-px-control > span {
+  color: var(--muted);
+  font-size: 13px;
 }
 @media (max-width: 760px) {
   .settings-row,
@@ -2006,6 +2019,9 @@ html[data-spacing="relaxed"] {
     padding: 12px 0;
   }
   .settings-row select {
+    width: 100%;
+  }
+  .preference-px-control {
     width: 100%;
   }
 }

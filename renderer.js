@@ -24,14 +24,25 @@ function loadPreferences() {
   try {
     const saved = JSON.parse(localStorage.getItem("mycel-preferences") || "{}");
     delete saved.theme;
+    const size = Math.min(32, Math.max(12, Number(saved.size) || 16));
+    const oldSpacing = { compact: 1.45, normal: 1.7, relaxed: 1.95 };
+    const lineSpacing = Math.min(
+      52,
+      Math.max(
+        16,
+        Number(saved.lineSpacing) ||
+          Math.round(size * (oldSpacing[saved.spacing] || 1.7)),
+      ),
+    );
+    delete saved.spacing;
     return {
-      font: "sans",
-      size: "16",
-      spacing: "normal",
       ...saved,
+      font: saved.font || "sans",
+      size: String(size),
+      lineSpacing: String(lineSpacing),
     };
   } catch {
-    return { font: "sans", size: "16", spacing: "normal" };
+    return { font: "sans", size: "16", lineSpacing: "27" };
   }
 }
 
@@ -39,8 +50,11 @@ function applyPreferences() {
   const root = document.documentElement;
   root.dataset.font = state.preferences.font;
   root.dataset.theme = "moss";
-  root.dataset.spacing = state.preferences.spacing;
   root.style.setProperty("--text-size", `${state.preferences.size}px`);
+  root.style.setProperty(
+    "--reading-line",
+    `${state.preferences.lineSpacing}px`,
+  );
 }
 
 function savePreferences() {
@@ -257,20 +271,27 @@ function renderSettings() {
             ><strong>Schriftgröße</strong
             ><small>Passt Navigation, Notizen und Oberfläche an.</small></span
           >
-          <select data-preference="size">
-            <option value="14" ${preference.size === "14" ? "selected" : ""}>
-              Klein
-            </option>
-            <option value="16" ${preference.size === "16" ? "selected" : ""}>
-              Mittel
-            </option>
-            <option value="18" ${preference.size === "18" ? "selected" : ""}>
-              Groß
-            </option>
-            <option value="20" ${preference.size === "20" ? "selected" : ""}>
-              Sehr groß
-            </option>
-          </select>
+          <div class="preference-px-control">
+            <input
+              type="range"
+              min="12"
+              max="32"
+              step="1"
+              data-preference="size"
+              value="${esc(preference.size)}"
+              aria-label="Schriftgröße in Pixeln"
+            />
+            <input
+              type="number"
+              min="12"
+              max="32"
+              step="1"
+              data-preference="size"
+              value="${esc(preference.size)}"
+              aria-label="Schriftgröße in Pixeln"
+            />
+            <span>px</span>
+          </div>
         </label>
         <label class="settings-row"
           ><span
@@ -313,26 +334,27 @@ function renderSettings() {
               >Mehr Luft zwischen Textzeilen erleichtert längeres Lesen.</small
             ></span
           >
-          <select data-preference="spacing">
-            <option
-              value="compact"
-              ${preference.spacing === "compact" ? "selected" : ""}
-            >
-              Kompakt
-            </option>
-            <option
-              value="normal"
-              ${preference.spacing === "normal" ? "selected" : ""}
-            >
-              Ausgewogen
-            </option>
-            <option
-              value="relaxed"
-              ${preference.spacing === "relaxed" ? "selected" : ""}
-            >
-              Locker
-            </option>
-          </select>
+          <div class="preference-px-control">
+            <input
+              type="range"
+              min="16"
+              max="52"
+              step="1"
+              data-preference="lineSpacing"
+              value="${esc(preference.lineSpacing)}"
+              aria-label="Zeilenabstand in Pixeln"
+            />
+            <input
+              type="number"
+              min="16"
+              max="52"
+              step="1"
+              data-preference="lineSpacing"
+              value="${esc(preference.lineSpacing)}"
+              aria-label="Zeilenabstand in Pixeln"
+            />
+            <span>px</span>
+          </div>
         </label>
       </section>
       <section class="settings-section settings-preview">
@@ -1341,10 +1363,29 @@ function render() {
   if (state.page === "chapters") applyChapterFilters();
   if (state.page === "settings") {
     page.querySelectorAll("[data-preference]").forEach((control) => {
-      control.addEventListener("change", () => {
-        state.preferences[control.dataset.preference] = control.value;
+      const updatePreference = () => {
+        const name = control.dataset.preference;
+        const minimum = Number(control.min);
+        const maximum = Number(control.max);
+        const rawValue = Number(control.value);
+        const value =
+          control.type === "range" || control.type === "number"
+            ? Number.isFinite(rawValue)
+              ? Math.min(maximum, Math.max(minimum, rawValue))
+              : Number(state.preferences[name])
+            : control.value;
+        state.preferences[name] = String(value);
+        page
+          .querySelectorAll(`[data-preference="${name}"]`)
+          .forEach((field) => {
+            field.value = String(value);
+          });
         savePreferences();
-      });
+      };
+      control.addEventListener(
+        control.type === "range" ? "input" : "change",
+        updatePreference,
+      );
     });
     page
       .querySelector("[data-action=reset-preferences]")
@@ -1352,7 +1393,7 @@ function render() {
         state.preferences = {
           font: "sans",
           size: "16",
-          spacing: "normal",
+          lineSpacing: "27",
         };
         savePreferences();
         render();
