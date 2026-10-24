@@ -31,6 +31,14 @@ npm run build:linux
 
 The runnable app folder and desktop entry are created in `dist/Mycel-linux-x64`. The desktop shortcut opens Mycel directly without `npm start`.
 
+To build an RPM package for Linux x86_64, install `rpmbuild` and run:
+
+```sh
+npm run build:rpm
+```
+
+The RPM is created in `dist/` with a system application shortcut and icon.
+
 ## Demo project
 
 `Mycel-Testprojekt` includes sample chapters, linked characters, hierarchical places with images, and connected knowledge entries. Open the folder in Mycel to explore these features.

@@ -1,0 +1,37 @@
+Name: mycel
+Version: @VERSION@
+Release: 1%{?dist}
+Summary: Lokaler Schreibraum für Romane
+License: MIT
+BuildArch: x86_64
+
+%description
+Mycel ist eine lokale Desktop-App zum Schreiben und Organisieren von Romanen.
+
+%prep
+
+%build
+
+%install
+mkdir -p %{buildroot}/opt/mycel
+cp -a %{_sourcedir}/Mycel-linux-x64/. %{buildroot}/opt/mycel/
+rm -f %{buildroot}/opt/mycel/Mycel.desktop
+mkdir -p %{buildroot}/usr/share/applications
+cat > %{buildroot}/usr/share/applications/mycel.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Mycel
+Comment=Lokaler Schreibraum für Romane
+Exec=/opt/mycel/Mycel
+Icon=mycel
+Terminal=false
+Categories=Office;
+StartupWMClass=Mycel
+EOF
+mkdir -p %{buildroot}/usr/share/icons/hicolor/256x256/apps
+install -m 644 %{buildroot}/opt/mycel/resources/app/mycel.png %{buildroot}/usr/share/icons/hicolor/256x256/apps/mycel.png
+
+%files
+/opt/mycel
+/usr/share/applications/mycel.desktop
+/usr/share/icons/hicolor/256x256/apps/mycel.png
