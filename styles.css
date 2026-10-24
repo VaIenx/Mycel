@@ -672,6 +672,27 @@ select {
   border: 1px solid #bfccbf;
   box-shadow: 0 8px 18px #6b44251e;
 }
+.editor-wrap[data-writing-mode="blinders"]::before,
+.editor-wrap[data-writing-mode="blinders"]::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  right: 0;
+  height: 28%;
+  pointer-events: none;
+  background: #eff2e9;
+}
+.editor-wrap[data-writing-mode="blinders"]::before {
+  top: 0;
+  border-bottom: 1px solid #9bad9a;
+  box-shadow: 0 7px 18px #31483b12;
+}
+.editor-wrap[data-writing-mode="blinders"]::after {
+  bottom: 0;
+  border-top: 1px solid #9bad9a;
+  box-shadow: 0 -7px 18px #31483b12;
+}
 .editor-tools {
   display: flex;
   align-items: center;
@@ -735,6 +756,37 @@ select {
 .editor-highlight:empty::before {
   content: attr(data-placeholder);
   color: #7a807b;
+}
+.editor-wrap[data-writing-mode="typewriter"] .editor-text,
+.editor-wrap[data-writing-mode="typewriter"] .editor-highlight {
+  padding-block: 35vh;
+}
+.editor-wrap[data-writing-mode="blinders"] .editor-text,
+.editor-wrap[data-writing-mode="blinders"] .editor-highlight {
+  padding-bottom: 35vh;
+}
+.editor-wrap[data-writing-mode="typewriter"] .editor-text {
+  overflow: hidden;
+}
+.toolbar[data-writing-mode="typewriter"] [data-format],
+.toolbar[data-writing-mode="typewriter"] .editor-tools-sep {
+  display: none;
+}
+.writing-mode-control {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.writing-mode-control .select-like {
+  min-width: 150px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
 }
 .character-mention {
   border-radius: 2px;

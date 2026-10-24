@@ -14,6 +14,11 @@ const state = {
   searchHits: [],
   chapterView: localStorage.getItem("mycel-chapter-view") || "grid",
   placeTab: localStorage.getItem("mycel-place-tab") || "list",
+  writingMode: ["normal", "blinders", "typewriter"].includes(
+    localStorage.getItem("mycel-writing-mode"),
+  )
+    ? localStorage.getItem("mycel-writing-mode")
+    : "normal",
 };
 const page = document.querySelector("#page");
 const dialog = document.querySelector("#dialog");
@@ -1041,6 +1046,15 @@ function renderKnowledge() {
     </div>`;
 }
 
+function keepTypewriterLineInView(editor) {
+  const lineHeight =
+    Number.parseFloat(getComputedStyle(editor).lineHeight) || 27;
+  editor.scrollTop = Math.max(
+    0,
+    editor.scrollHeight - editor.clientHeight - lineHeight,
+  );
+}
+
 function renderWriting() {
   const chapters = state.project.chapters;
   if (!state.activeChapter && chapters.length)
@@ -1095,7 +1109,7 @@ function renderWriting() {
         ${esc(chapter.volume || "Band 1")} &nbsp;/&nbsp;
         <strong>${esc(chapter.title || chapter.id)}</strong>
       </div>
-      <div class="toolbar">
+      <div class="editor-tools toolbar" data-writing-mode="${state.writingMode}">
         <button data-format="undo" title="Rückgängig">↶</button
         ><button data-format="redo" title="Wiederholen">↷</button
         ><i class="editor-tools-sep"></i><button data-format="heading">H</button
@@ -1106,8 +1120,31 @@ function renderWriting() {
         ><button data-format="scene">— ✦ —</button
         ><i class="editor-tools-sep"></i
         ><button data-action="save-now">✓ Gespeichert</button>
+        <label class="writing-mode-control" for="writing-mode">
+          Schreibmodus
+          <select id="writing-mode" class="select-like">
+            <option
+              value="normal"
+              ${state.writingMode === "normal" ? "selected" : ""}
+            >
+              Normal
+            </option>
+            <option
+              value="blinders"
+              ${state.writingMode === "blinders" ? "selected" : ""}
+            >
+              Scheuklappen
+            </option>
+            <option
+              value="typewriter"
+              ${state.writingMode === "typewriter" ? "selected" : ""}
+            >
+              Schreibmaschine
+            </option>
+          </select>
+        </label>
       </div>
-      <div class="editor-wrap">
+      <div class="editor-wrap" data-writing-mode="${state.writingMode}">
         <div
           id="editor-highlight"
           class="editor-highlight"
@@ -1117,7 +1154,7 @@ function renderWriting() {
         <textarea
           id="editor-text"
           class="editor-text"
-          spellcheck="true"
+          spellcheck="${state.writingMode === "typewriter" ? "false" : "true"}"
           placeholder="Schreib den ersten Satz deiner Geschichte …"
         ></textarea>
       </div>
@@ -1574,9 +1611,90 @@ function render() {
       highlight.scrollLeft = editor.scrollLeft;
     };
     updateHighlights();
+    if (state.writingMode === "typewriter") {
+      editor.setSelectionRange(editor.value.length, editor.value.length);
+      keepTypewriterLineInView(editor);
+    }
     editor.addEventListener("scroll", () => {
       highlight.scrollTop = editor.scrollTop;
       highlight.scrollLeft = editor.scrollLeft;
+    });
+    const modeSelect = page.querySelector("#writing-mode");
+    modeSelect?.addEventListener("change", () => {
+      state.writingMode = modeSelect.value;
+      localStorage.setItem("mycel-writing-mode", state.writingMode);
+      editor.closest(".editor-wrap").dataset.writingMode = state.writingMode;
+      modeSelect.closest(".toolbar").dataset.writingMode = state.writingMode;
+      editor.spellcheck = state.writingMode !== "typewriter";
+      if (state.writingMode === "typewriter") {
+        editor.setSelectionRange(editor.value.length, editor.value.length);
+        keepTypewriterLineInView(editor);
+      }
+      updateHighlights();
+      editor.focus();
+    });
+    const isTypewriter = () => state.writingMode === "typewriter";
+    const moveCaretToEnd = () => {
+      if (!isTypewriter()) return;
+      const end = editor.value.length;
+      if (editor.selectionStart !== end || editor.selectionEnd !== end)
+        editor.setSelectionRange(end, end);
+    };
+    editor.addEventListener("focus", moveCaretToEnd);
+    editor.addEventListener(
+      "wheel",
+      (event) => {
+        if (!isTypewriter()) return;
+        event.preventDefault();
+        keepTypewriterLineInView(editor);
+      },
+      { passive: false },
+    );
+    editor.addEventListener("beforeinput", (event) => {
+      if (!isTypewriter()) return;
+      const allowed = [
+        "insertText",
+        "insertLineBreak",
+        "insertParagraph",
+        "insertCompositionText",
+        "insertFromComposition",
+      ];
+      if (!allowed.includes(event.inputType)) {
+        event.preventDefault();
+        return;
+      }
+      moveCaretToEnd();
+    });
+    editor.addEventListener("keydown", (event) => {
+      if (!isTypewriter()) return;
+      const blockedKeys = [
+        "Backspace",
+        "Delete",
+        "ArrowLeft",
+        "ArrowRight",
+        "ArrowUp",
+        "ArrowDown",
+        "Home",
+        "PageUp",
+        "PageDown",
+      ];
+      if (blockedKeys.includes(event.key)) {
+        event.preventDefault();
+        moveCaretToEnd();
+        return;
+      }
+      const blockedShortcuts = ["x", "v", "z", "y"];
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        blockedShortcuts.includes(event.key.toLowerCase())
+      )
+        event.preventDefault();
+    });
+    editor.addEventListener("paste", (event) => {
+      if (isTypewriter()) event.preventDefault();
+    });
+    editor.addEventListener("cut", (event) => {
+      if (isTypewriter()) event.preventDefault();
     });
     highlight.addEventListener("pointerover", (event) => {
       const mention = event.target.closest(".character-mention");
@@ -1617,6 +1735,10 @@ function render() {
     });
   }
   editor?.addEventListener("input", () => {
+    if (state.writingMode === "typewriter") {
+      editor.setSelectionRange(editor.value.length, editor.value.length);
+      keepTypewriterLineInView(editor);
+    }
     const ch = currentChapter();
     if (!ch) return;
     ch.body = editor.value;
@@ -3200,6 +3322,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 function formatText(kind) {
+  if (state.writingMode === "typewriter") return;
   const editor = page.querySelector("#editor-text");
   if (!editor) return;
   const start = editor.selectionStart;
