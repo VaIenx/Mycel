@@ -100,10 +100,12 @@ async function readProject() {
   const charactersDir = insideProject("Characters");
   const placesDir = insideProject("Places");
   const knowledgeDir = insideProject("Knowledge");
+  const mediaDir = insideProject("Media");
   await fs.mkdir(chaptersDir, { recursive: true });
   await fs.mkdir(charactersDir, { recursive: true });
   await fs.mkdir(placesDir, { recursive: true });
   await fs.mkdir(knowledgeDir, { recursive: true });
+  await fs.mkdir(mediaDir, { recursive: true });
   await fs.mkdir(insideProject(".mycel"), { recursive: true });
   const chapters = [];
   const characters = [];
@@ -163,13 +165,11 @@ async function readProject() {
           record.image ||= parse(field("image"), "");
           record.color ||= parse(field("color"), "");
           record.traits ||= parse(field("traits"), "");
+          record.notes ||= parse(field("notes"), "");
           record.relationships ||= parse(field("relationships"), []);
           record.description ||= body.slice(frontmatter[0].length).trim();
         }
-        if (record.image && !String(record.image).startsWith("file:"))
-          record.image = pathToFileURL(
-            insideProject(...String(record.image).split("/")),
-          ).href;
+        record.image = await mediaImageUrl(record.image);
       }
       if (kind === "place") {
         const frontmatter = body.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
@@ -198,8 +198,6 @@ async function readProject() {
           record.region ||= parse(field("region"), "");
           record.city ||= parse(field("city"), "");
           record.image ||= parse(field("image"), "");
-          if (record.parent === undefined)
-            record.parent = parse(field("parent"), "");
           record.color ||= parse(field("color"), "");
           record.traits ||= parse(field("traits"), "");
           record.description ||= body.slice(frontmatter[0].length).trim();
@@ -211,14 +209,10 @@ async function readProject() {
         record.region ||= "";
         record.city ||= "";
         record.image ||= "";
-        if (record.parent === undefined) record.parent = "";
         record.color ||= "";
         record.traits ||= "";
         record.description ||= "";
-        if (record.image && !String(record.image).startsWith("file:"))
-          record.image = pathToFileURL(
-            insideProject(...String(record.image).split("/")),
-          ).href;
+        record.image = await mediaImageUrl(record.image);
       }
       if (kind === "knowledge") {
         const frontmatter = body.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
@@ -276,6 +270,8 @@ async function readProject() {
     places,
     knowledge,
     goal: metadata.goal || 100000,
+    chapterStatuses: metadata.chapterStatuses || [],
+    chapterStatusColors: metadata.chapterStatusColors || {},
     history: metadata.history || [],
   };
 }
@@ -303,24 +299,66 @@ function safeId(value) {
   return id;
 }
 
+async function mediaImageUrl(image) {
+  if (!image) return "";
+  let source;
+  try {
+    source = String(image).startsWith("file:")
+      ? fileURLToPath(image)
+      : insideProject(...String(image).split("/"));
+    const relativeSource = path.relative(projectRoot, source);
+    if (relativeSource.startsWith("..") || path.isAbsolute(relativeSource))
+      return "";
+    if (relativeSource.split(path.sep)[0] === "Media")
+      return pathToFileURL(source).href;
+    await fs.access(source);
+    const extension = path.extname(source).toLowerCase();
+    if (!/\.(png|jpe?g|webp|gif|svg)$/i.test(extension)) return "";
+    const mediaDir = insideProject("Media");
+    await fs.mkdir(mediaDir, { recursive: true });
+    const base = safeId(
+      relativeSource.slice(0, -extension.length).split(path.sep).join("-"),
+    );
+    const target = path.join(mediaDir, base + extension);
+    if (path.resolve(target) !== path.resolve(source))
+      await fs.copyFile(source, target);
+    return pathToFileURL(target).href;
+  } catch {
+    return "";
+  }
+}
+
 async function chooseProjectImage(folder) {
+  const mediaDir = insideProject("Media");
+  await fs.mkdir(mediaDir, { recursive: true });
   const result = await dialog.showOpenDialog(windowRef, {
+    defaultPath: mediaDir,
     properties: ["openFile"],
     filters: [
       {
         name: "Bilder",
-        extensions: ["png", "jpg", "jpeg", "webp", "gif"],
+        extensions: ["png", "jpg", "jpeg", "webp", "gif", "svg"],
       },
     ],
   });
   if (result.canceled || !result.filePaths[0]) return "";
   const source = result.filePaths[0];
   const extension = path.extname(source).toLowerCase();
-  const relative =
-    folder + "/images/" + safeId(path.basename(source, extension)) + extension;
-  const target = insideProject(...relative.split("/"));
-  await fs.mkdir(path.dirname(target), { recursive: true });
-  await fs.copyFile(source, target);
+  const base = safeId(path.basename(source, extension));
+  let fileName = base + extension;
+  let target = path.join(mediaDir, fileName);
+  let suffix = 2;
+  while (path.resolve(target) !== path.resolve(source)) {
+    try {
+      await fs.access(target);
+      fileName = `${base}-${suffix++}${extension}`;
+      target = path.join(mediaDir, fileName);
+    } catch {
+      break;
+    }
+  }
+  if (path.resolve(source) !== path.resolve(target))
+    await fs.copyFile(source, target);
   return pathToFileURL(target).href;
 }
 
@@ -336,6 +374,21 @@ function registerIpc() {
     return project;
   });
   ipcMain.handle("project:current", async () => readProject());
+  ipcMain.handle("media:list", async () => {
+    if (!projectRoot) return [];
+    const directory = insideProject("Media");
+    await fs.mkdir(directory, { recursive: true });
+    const files = await fs.readdir(directory, { withFileTypes: true });
+    return files
+      .filter(
+        (file) =>
+          file.isFile() && /\.(png|jpe?g|webp|gif|svg)$/i.test(file.name),
+      )
+      .map((file) => ({
+        name: file.name,
+        url: pathToFileURL(insideProject("Media", file.name)).href,
+      }));
+  });
   ipcMain.handle("project:recent", async () => readRecentProjects());
   ipcMain.handle("project:forget-recent", async (_event, root) =>
     forgetProject(root),
@@ -422,6 +475,7 @@ function registerIpc() {
         .filter(Boolean),
       description: String(character.description || ""),
       traits: String(character.traits || ""),
+      notes: String(character.notes || ""),
       image,
       color: /^#[0-9a-f]{6}$/i.test(String(character.color || ""))
         ? String(character.color)
@@ -432,6 +486,7 @@ function registerIpc() {
             .map((rel) => ({
               target: String(rel.target),
               type: String(rel.type),
+              bidirectional: Boolean(rel.bidirectional),
             }))
         : [],
     };
@@ -440,6 +495,7 @@ name: ${JSON.stringify(record.name)}
 role: ${JSON.stringify(record.role)}
 aliases: ${JSON.stringify(record.aliases)}
 traits: ${JSON.stringify(record.traits)}
+notes: ${JSON.stringify(record.notes)}
 image: ${JSON.stringify(record.image)}
 color: ${JSON.stringify(record.color)}
 relationships: ${JSON.stringify(record.relationships)}
@@ -448,9 +504,27 @@ relationships: ${JSON.stringify(record.relationships)}
 ${record.description}
 `;
     await fs.writeFile(file, markdown, "utf8");
-    await writeMetadata({
-      characters: { ...(await readMetadataPart("characters")), [id]: record },
-    });
+    const characters = await readMetadataPart("characters");
+    for (const [otherId, other] of Object.entries(characters)) {
+      if (otherId === id) continue;
+      other.relationships = (other.relationships || []).filter(
+        (relation) => relation.target !== id || !relation.bidirectional,
+      );
+    }
+    characters[id] = record;
+    for (const relation of record.relationships) {
+      if (!relation.bidirectional || !characters[relation.target]) continue;
+      const target = characters[relation.target];
+      target.relationships = (target.relationships || []).filter(
+        (item) => item.target !== id,
+      );
+      target.relationships.push({
+        target: id,
+        type: relation.type,
+        bidirectional: true,
+      });
+    }
+    await writeMetadata({ characters });
     return { id, file: "Characters/" + id + ".md" };
   });
   ipcMain.handle("character:choose-image", () =>
@@ -462,6 +536,10 @@ ${record.description}
     await fs.rm(insideProject("Characters", id + ".md"), { force: true });
     const characters = await readMetadataPart("characters");
     delete characters[id];
+    for (const character of Object.values(characters))
+      character.relationships = (character.relationships || []).filter(
+        (relation) => relation.target !== id,
+      );
     await writeMetadata({ characters });
     return true;
   });
@@ -491,7 +569,6 @@ ${record.description}
       continent: String(place.continent || "").trim(),
       region: String(place.region || "").trim(),
       city: String(place.city || "").trim(),
-      parent: String(place.parent || ""),
       description: String(place.description || ""),
       traits: String(place.traits || ""),
       image,
@@ -506,7 +583,6 @@ category: ${JSON.stringify(record.category)}
 continent: ${JSON.stringify(record.continent)}
 region: ${JSON.stringify(record.region)}
 city: ${JSON.stringify(record.city)}
-parent: ${JSON.stringify(record.parent)}
 color: ${JSON.stringify(record.color)}
 traits: ${JSON.stringify(record.traits)}
 image: ${JSON.stringify(record.image)}
@@ -525,8 +601,6 @@ ${record.description}
     await fs.rm(insideProject("Places", id + ".md"), { force: true });
     const places = await readMetadataPart("places");
     delete places[id];
-    for (const place of Object.values(places))
-      if (place.parent === id) place.parent = "";
     await writeMetadata({ places });
     return true;
   });
@@ -598,7 +672,24 @@ ${record.description}
     return true;
   });
   ipcMain.handle("project:settings", async (_event, settings) => {
-    await writeMetadata({ goal: Math.max(0, Number(settings.goal) || 0) });
+    await writeMetadata({
+      goal: Math.max(0, Number(settings.goal) || 0),
+      ...(Array.isArray(settings.chapterStatuses)
+        ? {
+            chapterStatuses: [
+              ...new Set(
+                settings.chapterStatuses
+                  .map(String)
+                  .map((status) => status.trim())
+                  .filter(Boolean),
+              ),
+            ],
+          }
+        : {}),
+      ...(settings.chapterStatusColors
+        ? { chapterStatusColors: settings.chapterStatusColors }
+        : {}),
+    });
     return readProject();
   });
   ipcMain.handle("project:session", async (_event, entry) => {

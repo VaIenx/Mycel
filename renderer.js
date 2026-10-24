@@ -12,6 +12,7 @@ const state = {
   searchMode: "find",
   searchHitIndex: 0,
   searchHits: [],
+  chapterView: localStorage.getItem("mycel-chapter-view") || "grid",
 };
 const page = document.querySelector("#page");
 const dialog = document.querySelector("#dialog");
@@ -449,10 +450,22 @@ function renderHome() {
 
 function chapterCard(ch, index) {
   const status = ch.status || "Entwurf";
+  const statuses = [
+    ...new Set([
+      "Entwurf",
+      "In Arbeit",
+      "Fertig",
+      ...(state.project.chapterStatuses || []),
+      ...state.project.chapters.map((chapter) => chapter.status),
+    ]),
+  ].sort();
+  const statusIndex = statuses.indexOf(status);
+  const statusHue = Math.round(statusIndex * 137.508) % 360;
   return html`<article
     class="chapter-card"
     data-action="write-chapter"
     data-id="${esc(ch.id)}"
+    style="--chapter-status-color: hsl(${statusHue} 32% 87%)"
   >
     <button
       class="card-edit"
@@ -463,9 +476,7 @@ function chapterCard(ch, index) {
       ···</button
     ><span class="chapter-number">${index + 1}</span>
     <h3>${esc(ch.title || ch.id)}</h3>
-    <span class="status ${status === "Fertig" ? "complete" : ""}"
-      >${esc(status)}</span
-    >
+    <span class="status">${esc(status)}</span>
     <div class="volume-label">${esc(ch.volume || "Band 1")}</div>
     <p class="chapter-excerpt">
       ${esc(
@@ -509,6 +520,7 @@ function renderChapters() {
       <select class="select-like" id="volume-filter">
         <option value="all">Band: Alle Bände</option>
         ${[...new Set(chapters.map((ch) => ch.volume || "Band 1"))]
+          .sort((a, b) => a.localeCompare(b, "de", { numeric: true }))
           .map((v) => html`<option>${esc(v)}</option>`)
           .join("")}</select
       ><input
@@ -516,12 +528,39 @@ function renderChapters() {
         class="search"
         placeholder="Kapitel suchen …"
       />
-      <div class="view-toggle">
-        <button class="active">▦</button
-        ><button title="Liste (bald verfügbar)">☷</button>
+      <div class="view-toggle" aria-label="Kapitelansicht">
+        <button
+          type="button"
+          data-chapter-view="grid"
+          class="${state.chapterView === "grid" ? "active" : ""}"
+          aria-label="Kachelansicht"
+          title="Kachelansicht"
+        >
+          ▦</button
+        ><button
+          type="button"
+          data-chapter-view="list"
+          class="${state.chapterView === "list" ? "active" : ""}"
+          aria-label="Listenansicht"
+          title="Listenansicht"
+        >
+          ☷
+        </button>
       </div>
     </div>
-    <div id="chapter-grid" class="grid">${cards}</div>
+    <div
+      id="chapter-grid"
+      class="grid chapter-grid ${state.chapterView === "list"
+        ? "list-view"
+        : ""}"
+    >
+      ${cards}
+    </div>
+    ${chapters.length
+      ? html`<div class="quiet" data-chapter-no-results hidden>
+          Keine passenden Kapitel gefunden.
+        </div>`
+      : ""}
     <button
       class="fab"
       data-action="new-chapter"
@@ -611,50 +650,20 @@ function renderCharacters() {
     </button>`;
 }
 
-function placeAncestors(place) {
-  const ancestors = [];
-  const seen = new Set([place.id]);
-  let parentId = place.parent;
-  while (parentId && !seen.has(parentId)) {
-    seen.add(parentId);
-    const parent = state.project.places.find((item) => item.id === parentId);
-    if (!parent) break;
-    ancestors.unshift(parent);
-    parentId = parent.parent;
-  }
-  return ancestors;
-}
-
 function placePath(place) {
-  return [...placeAncestors(place).map((item) => item.name), place.name]
-    .filter(Boolean)
-    .join(" › ");
+  return place.name || "";
 }
 
 function placeContinent(place) {
-  if (place.continent) return place.continent;
-  return (
-    [...placeAncestors(place), place].find(
-      (item) => item.category === "Kontinent",
-    )?.name || ""
-  );
+  return place.continent || "";
 }
 
 function placeCity(place) {
-  if (place.city) return place.city;
-  return (
-    [...placeAncestors(place), place].find((item) => item.category === "Stadt")
-      ?.name || ""
-  );
+  return place.city || "";
 }
 
 function placeRegion(place) {
-  if (place.region) return place.region;
-  return (
-    [...placeAncestors(place), place]
-      .reverse()
-      .find((item) => ["Land", "Region"].includes(item.category))?.name || ""
-  );
+  return place.region || "";
 }
 
 function placeCard(place) {
@@ -1086,7 +1095,9 @@ function showEntityTooltip(entity, event) {
     <p>
       ${esc(
         excerpt(
-          entity.description || entity.traits || "Noch keine Beschreibung.",
+          [entity.description, entity.traits, entity.notes]
+            .filter(Boolean)
+            .join(" · ") || "Noch keine Beschreibung.",
           120,
         ),
       )}
@@ -1094,6 +1105,36 @@ function showEntityTooltip(entity, event) {
   tooltip.hidden = false;
   tooltip.style.left = `${Math.min(event.clientX + 14, innerWidth - 270)}px`;
   tooltip.style.top = `${Math.min(event.clientY + 16, innerHeight - 120)}px`;
+}
+
+function applyChapterFilters() {
+  const search = page.querySelector("#chapter-search");
+  const filter = page.querySelector("#volume-filter");
+  const query = (search?.value || "").trim().toLocaleLowerCase("de-DE");
+  const volume = filter?.value || "all";
+  const cards = [...page.querySelectorAll(".chapter-card")];
+  for (const card of cards) {
+    const chapter = state.project.chapters.find(
+      (item) => item.id === card.dataset.id,
+    );
+    const searchable = chapter
+      ? [
+          chapter.title,
+          chapter.body,
+          chapter.volume || "Band 1",
+          chapter.status || "Entwurf",
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLocaleLowerCase("de-DE")
+      : "";
+    card.hidden =
+      !chapter ||
+      (query && !searchable.includes(query)) ||
+      (volume !== "all" && (chapter.volume || "Band 1") !== volume);
+  }
+  const empty = page.querySelector("[data-chapter-no-results]");
+  if (empty) empty.hidden = cards.some((card) => !card.hidden);
 }
 
 function render() {
@@ -1114,6 +1155,7 @@ function render() {
   else if (state.page === "knowledge") page.innerHTML = renderKnowledge();
   else if (state.page === "writing") page.innerHTML = renderWriting();
   else if (state.page === "progress") page.innerHTML = renderProgress();
+  if (state.page === "chapters") applyChapterFilters();
   if (state.page === "settings") {
     page.querySelectorAll("[data-preference]").forEach((control) => {
       control.addEventListener("change", () => {
@@ -1133,26 +1175,6 @@ function render() {
         render();
         toast("Darstellung zurückgesetzt.");
       });
-  }
-  if (state.page === "chapters") {
-    const search = page.querySelector("#chapter-search");
-    const filter = page.querySelector("#volume-filter");
-    const apply = () =>
-      page.querySelectorAll(".chapter-card").forEach((card) => {
-        const ch = state.project.chapters.find(
-          (item) => item.id === card.dataset.id,
-        );
-        const matches =
-          ch &&
-          (!search.value ||
-            (ch.title + " " + ch.body)
-              .toLowerCase()
-              .includes(search.value.toLowerCase())) &&
-          (filter.value === "all" || (ch.volume || "Band 1") === filter.value);
-        card.hidden = !matches;
-      });
-    search?.addEventListener("input", apply);
-    filter?.addEventListener("change", apply);
   }
   if (state.page === "characters") {
     const search = page.querySelector("#character-search");
@@ -1427,16 +1449,24 @@ function editChapterForm(existing = null) {
           name="volume"
           value="${esc(existing?.volume || "Band 1")}" /></label
       ><label class="field"
-        >Status<select name="status">
-          ${["Entwurf", "In Arbeit", "Fertig"]
-            .map(
-              (status) =>
-                html`<option ${existing?.status === status ? "selected" : ""}>
-                  ${status}
-                </option>`,
-            )
+        >Status<input
+          name="status"
+          list="chapter-status-options"
+          value="${esc(existing?.status || "Entwurf")}"
+        />
+        <datalist id="chapter-status-options">
+          ${[
+            ...new Set([
+              "Entwurf",
+              "In Arbeit",
+              "Fertig",
+              ...(state.project.chapterStatuses || []),
+              ...state.project.chapters.map((chapter) => chapter.status),
+            ]),
+          ]
+            .map((status) => html`<option value="${esc(status)}"></option>`)
             .join("")}
-        </select></label
+        </datalist></label
       ><label class="field"
         >Reihenfolge<input
           name="order"
@@ -1464,12 +1494,19 @@ function editChapterForm(existing = null) {
         id,
         title,
         volume: data.get("volume").trim() || "Band 1",
-        status: data.get("status"),
+        status: data.get("status").trim() || "Entwurf",
         target: Number(data.get("target")) || 0,
         body: existing?.body || "",
         order: Number(data.get("order")) || state.project.chapters.length + 1,
       };
       if (!editing) state.project.chapters.push(chapter);
+      state.project.chapterStatuses = [
+        ...new Set([...(state.project.chapterStatuses || []), chapter.status]),
+      ];
+      await api.saveSettings({
+        goal: state.project.goal,
+        chapterStatuses: state.project.chapterStatuses,
+      });
       Object.assign(existing || chapter, chapter);
       if (!editing) state.activeChapter = id;
       state.project.chapters.sort(
@@ -1539,7 +1576,13 @@ function editCharacterForm(ch = {}) {
             name="relationType"
             value="${esc(rel.type || "")}"
             placeholder="Beziehung"
-          /><button
+          /><label class="relation-bidirectional"
+            ><input
+              type="checkbox"
+              name="relationBidirectional"
+              ${rel.bidirectional ? "checked" : ""}
+            />Beidseitig</label
+          ><button
             type="button"
             class="button small"
             data-remove-relation
@@ -1561,7 +1604,10 @@ function editCharacterForm(ch = {}) {
               html`<option value="${esc(item.id)}">${esc(item.name)}</option>`,
           )
           .join("")}</select
-      ><input name="relationType" placeholder="Beziehung" /><button
+      ><input name="relationType" placeholder="Beziehung" /><label
+        class="relation-bidirectional"
+        ><input type="checkbox" name="relationBidirectional" />Beidseitig</label
+      ><button
         type="button"
         class="button small"
         data-remove-relation
@@ -1613,9 +1659,15 @@ function editCharacterForm(ch = {}) {
           placeholder="Wer ist diese Figur?"
         ></textarea></label
       ><label class="field full"
-        >Eigenschaften / Notizen<textarea
+        >Eigenschaften<textarea
           name="traits"
           placeholder="Ziele, Konflikte, Besonderheiten …"
+        ></textarea>
+      </label>
+      <label class="field full"
+        >Notizen<textarea
+          name="notes"
+          placeholder="Freie Notizen zur Figur …"
         ></textarea>
       </label>
       <div class="field full">
@@ -1633,7 +1685,7 @@ function editCharacterForm(ch = {}) {
           placeholder="Noch kein Bild ausgewählt"
           readonly
         /><button type="button" class="button small" data-image>
-          Bild aus Ordner auswählen …
+          Medien auswählen oder hinzufügen …
         </button>
       </div>
     </div>`,
@@ -1672,12 +1724,12 @@ function editCharacterForm(ch = {}) {
         state.project.characters.some((item) => item.id === id)
       )
         id = `${slug(name)}-${suffix++}`;
-      const targets = data.getAll("relationTarget");
-      const types = data.getAll("relationType");
-      const relationships = targets
-        .map((target, index) => ({
-          target,
-          type: String(types[index] || "").trim(),
+      const relationships = [...dialog.querySelectorAll(".relation-row")]
+        .map((row) => ({
+          target: row.querySelector('[name="relationTarget"]').value,
+          type: row.querySelector('[name="relationType"]').value.trim(),
+          bidirectional: row.querySelector('[name="relationBidirectional"]')
+            .checked,
         }))
         .filter((rel) => rel.target && rel.type);
       try {
@@ -1688,6 +1740,7 @@ function editCharacterForm(ch = {}) {
           aliases: data.get("aliases"),
           description: data.get("description"),
           traits: data.get("traits"),
+          notes: data.get("notes"),
           color,
           relationships,
           image: data.get("image"),
@@ -1708,6 +1761,7 @@ function editCharacterForm(ch = {}) {
   );
   dialog.querySelector('[name="description"]').value = ch.description || "";
   dialog.querySelector('[name="traits"]').value = ch.traits || "";
+  dialog.querySelector('[name="notes"]').value = ch.notes || "";
   dialog
     .querySelector("[data-add-relation]")
     ?.addEventListener("click", () =>
@@ -1741,7 +1795,9 @@ function openCharacter(ch) {
       );
       return target
         ? html`<div class="relation-chip">
-            <strong>${esc(target.name)}</strong><span>${esc(rel.type)}</span>
+            <strong
+              >${rel.bidirectional ? "↔" : "→"} ${esc(target.name)}</strong
+            ><span>${esc(rel.type)}</span>
           </div>`
         : "";
     })
@@ -1774,10 +1830,12 @@ function openCharacter(ch) {
         <div class="detail-copy">
           ${esc(ch.description || "Noch keine Beschreibung.")}
         </div>
-        <h3>Notizen</h3>
+        <h3>Eigenschaften</h3>
         <div class="detail-copy">
-          ${esc(ch.traits || "Noch keine Eigenschaften oder Notizen.")}
+          ${esc(ch.traits || "Noch keine Eigenschaften.")}
         </div>
+        <h3>Notizen</h3>
+        <div class="detail-copy">${esc(ch.notes || "Noch keine Notizen.")}</div>
         <h3>Beziehungen</h3>
         <div class="relation-list">
           ${relationships ||
@@ -1810,9 +1868,6 @@ function openCharacter(ch) {
 
 function editPlaceForm(place = {}) {
   const editing = !!place.id;
-  const candidates = [...state.project.places]
-    .filter((item) => item.id !== place.id)
-    .sort((a, b) => placePath(a).localeCompare(placePath(b), "de"));
   openDialog(
     editing ? "Ort bearbeiten" : "Neuer Ort",
     html`<div class="form-grid">
@@ -1848,23 +1903,9 @@ function editPlaceForm(place = {}) {
         >Markierungsfarbe<input
           name="color"
           type="color"
-          value="${characterColor(place)}" /></label
-      ><label class="field full"
-        >Übergeordneter Ort<select name="parent">
-          <option value="">Keiner</option>
-          ${candidates
-            .map(
-              (item) =>
-                html`<option
-                  value="${esc(item.id)}"
-                  ${place.parent === item.id ? "selected" : ""}
-                >
-                  ${esc(placePath(item))}
-                </option>`,
-            )
-            .join("")}
-        </select></label
-      ><label class="field"
+          value="${characterColor(place)}"
+      /></label>
+      <label class="field"
         >Kontinent<input
           name="continent"
           value="${esc(place.continent || "")}" /></label
@@ -1879,7 +1920,7 @@ function editPlaceForm(place = {}) {
           placeholder="Kurzname, frühere Namen"
       /></label>
       <div class="field full">
-        <label>Titelbild</label>
+        <label>Titelbild aus dem Medienordner</label>
         <div class="place-image-preview" data-place-image-preview>
           ${place.image
             ? html`<img src="${esc(place.image)}" alt="" />`
@@ -1888,7 +1929,7 @@ function editPlaceForm(place = {}) {
         <input type="hidden" name="image" value="${esc(place.image || "")}" />
         <div class="place-image-actions">
           <button type="button" class="button small" data-place-image>
-            Bild auswählen …
+            Medien auswählen oder hinzufügen …
           </button>
           <button
             type="button"
@@ -1949,21 +1990,6 @@ function editPlaceForm(place = {}) {
         toast("Bitte wähle eine eigene Markierungsfarbe.");
         return false;
       }
-      const parent = data.get("parent");
-      if (place.id && parent) {
-        let current = state.project.places.find((item) => item.id === parent);
-        const seen = new Set();
-        while (current && !seen.has(current.id)) {
-          if (current.id === place.id) {
-            toast("Ein Ort kann nicht unter einem seiner Unterorte liegen.");
-            return false;
-          }
-          seen.add(current.id);
-          current = state.project.places.find(
-            (item) => item.id === current.parent,
-          );
-        }
-      }
       let id = place.id || slug(name);
       let suffix = 2;
       while (!editing && state.project.places.some((item) => item.id === id))
@@ -1976,7 +2002,6 @@ function editPlaceForm(place = {}) {
           continent: data.get("continent"),
           region: data.get("region"),
           city: data.get("city"),
-          parent,
           aliases: data.get("aliases"),
           description: data.get("description"),
           traits: data.get("traits"),
@@ -2015,10 +2040,6 @@ function editPlaceForm(place = {}) {
 }
 
 function openPlace(place) {
-  const parent = state.project.places.find((item) => item.id === place.parent);
-  const children = state.project.places.filter(
-    (item) => item.parent === place.id,
-  );
   openDialog(
     place.name,
     html`<div class="place-detail">
@@ -2030,18 +2051,6 @@ function openPlace(place) {
       <span class="role-chip">${esc(place.category || "Ort")}</span>
       <div class="place-path">${esc(placePath(place))}</div>
       <div class="place-facts">
-        <span
-          >Übergeordnet:
-          ${parent
-            ? html`<button
-                class="button small"
-                data-action="open-place"
-                data-id="${esc(parent.id)}"
-              >
-                ${esc(parent.name)}
-              </button>`
-            : "—"}</span
-        >
         <span>Kontinent: ${esc(placeContinent(place) || "—")}</span>
         <span>Region: ${esc(placeRegion(place) || "—")}</span>
         <span>Stadt: ${esc(placeCity(place) || "—")}</span>
@@ -2050,23 +2059,6 @@ function openPlace(place) {
       <p class="detail-copy">
         ${esc(place.description || "Noch keine Beschreibung.")}
       </p>
-      <h3>Orte darunter</h3>
-      <div class="place-children">
-        ${children.length
-          ? children
-              .map(
-                (child) =>
-                  html`<button
-                    class="button small"
-                    data-action="open-place"
-                    data-id="${esc(child.id)}"
-                  >
-                    ${esc(child.name)}
-                  </button>`,
-              )
-              .join("")
-          : '<span class="small-note">Noch keine Unterorte verknüpft.</span>'}
-      </div>
       <h3>Notizen</h3>
       <div class="detail-copy">${esc(place.traits || "Keine Notizen.")}</div>
     </div>`,
@@ -2667,9 +2659,13 @@ function openRelationshipMap() {
       const key = [source.id, target.id].sort().join("::");
       if (seen.has(key)) continue;
       seen.add(key);
+      const reciprocal = (target.relationships || []).some(
+        (item) => item.target === source.id,
+      );
       relations.push(
         html`<div class="relationship-map-row">
-          <span>${esc(source.name)}</span><b>↔</b
+          <span>${esc(source.name)}</span
+          ><b>${relation.bidirectional || reciprocal ? "↔" : "→"}</b
           ><span>${esc(target.name)}</span><small>${esc(relation.type)}</small>
         </div>`,
       );
@@ -2744,6 +2740,13 @@ async function removeRecentProject(root) {
 }
 
 document.addEventListener("click", async (event) => {
+  const chapterViewButton = event.target.closest("[data-chapter-view]");
+  if (chapterViewButton) {
+    state.chapterView = chapterViewButton.dataset.chapterView;
+    localStorage.setItem("mycel-chapter-view", state.chapterView);
+    render();
+    return;
+  }
   const searchResult = event.target.closest("[data-search-kind]");
   if (searchResult) {
     if (
@@ -2818,6 +2821,12 @@ document.addEventListener("click", async (event) => {
     render();
     toast("Manuskriptziel gespeichert.");
   }
+});
+document.addEventListener("input", (event) => {
+  if (event.target.matches("#chapter-search")) applyChapterFilters();
+});
+document.addEventListener("change", (event) => {
+  if (event.target.matches("#volume-filter")) applyChapterFilters();
 });
 
 function openProjectSearch(mode = "find") {

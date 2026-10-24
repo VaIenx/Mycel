@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("mycel", {
   forgetRecentProject: (root) =>
     ipcRenderer.invoke("project:forget-recent", root),
   openRecentProject: (root) => ipcRenderer.invoke("project:open-recent", root),
+  listMedia: () => ipcRenderer.invoke("media:list"),
   saveChapter: (chapter) => ipcRenderer.invoke("chapter:save", chapter),
   deleteChapter: (id) => ipcRenderer.invoke("chapter:delete", id),
   saveCharacter: (character) => ipcRenderer.invoke("character:save", character),

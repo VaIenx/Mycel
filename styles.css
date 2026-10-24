@@ -426,6 +426,39 @@ select {
   display: flex;
   flex-direction: column;
 }
+.chapter-card[hidden] {
+  display: none;
+}
+.chapter-grid.list-view {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+.chapter-grid.list-view .chapter-card {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 4px 18px;
+  padding: 18px 22px;
+}
+.chapter-grid.list-view .chapter-card h3 {
+  margin: 0;
+}
+.chapter-grid.list-view .chapter-card .status {
+  grid-column: 2;
+  grid-row: 1;
+}
+.chapter-grid.list-view .chapter-card .volume-label,
+.chapter-grid.list-view .chapter-card .chapter-excerpt,
+.chapter-grid.list-view .chapter-card .card-foot {
+  grid-column: 1 / -1;
+}
+.chapter-grid.list-view .chapter-card .volume-label {
+  margin-top: 4px;
+}
+.chapter-grid.list-view .chapter-card .card-foot {
+  margin-top: 6px;
+}
 .chapter-card:hover,
 .character-card:hover {
   transform: translateY(-2px);
@@ -468,9 +501,14 @@ select {
   color: #957654;
   background: #e5ebe0;
 }
-.status.complete {
-  color: #416b55;
-  border-color: #8cae93;
+.status {
+  border-color: color-mix(
+    in srgb,
+    var(--chapter-status-color, #cbd8c9),
+    #556b59 35%
+  );
+  color: #3f5848;
+  background: var(--chapter-status-color, #e5ebe0);
 }
 .volume-label {
   margin-top: 16px;
@@ -1542,12 +1580,16 @@ select {
   font-size: 12px;
 }
 .knowledge-card {
-  min-height: 190px;
+  aspect-ratio: 1;
+  min-height: 0;
+  overflow: hidden;
   padding: 17px;
   border: 1px solid #bdcbb9;
   border-radius: 3px;
   background: #f3f5ed;
   cursor: pointer;
+  display: flex;
+  flex-direction: column;
 }
 .knowledge-card:hover {
   border-color: #8fa68f;
@@ -1567,11 +1609,27 @@ select {
 .knowledge-card h3 {
   margin: 14px 0 5px;
   font-size: 19px;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 .knowledge-card p {
-  min-height: 40px;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  text-overflow: ellipsis;
+  margin: 8px 0;
   font-size: 13px;
   line-height: 1.5;
+}
+.relation-bidirectional {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  font-size: 11px;
 }
 .knowledge-aliases,
 .knowledge-relations {
