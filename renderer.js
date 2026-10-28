@@ -14,6 +14,10 @@ const state = {
   searchHits: [],
   chapterView: localStorage.getItem("mycel-chapter-view") || "grid",
   placeTab: localStorage.getItem("mycel-place-tab") || "list",
+  timelineZoom: Math.min(
+    160,
+    Math.max(50, Number(localStorage.getItem("mycel-timeline-zoom")) || 100),
+  ),
   writingMode: ["normal", "blinders", "typewriter"].includes(
     localStorage.getItem("mycel-writing-mode"),
   )
@@ -1676,6 +1680,52 @@ ${esc(editorBody.text)}</textarea
   </section>`;
 }
 
+function relationHistoryEntry(item = {}) {
+  const chapters = [...state.project.chapters].sort(
+    (left, right) => (left.order ?? 9999) - (right.order ?? 9999),
+  );
+  return html`<div
+    class="wiki-relation-history-entry"
+    data-relation-history-entry
+  >
+    <select data-relation-history-chapter aria-label="Kapitel">
+      <option value="">Kapitel auswählen</option>
+      ${chapters.map(
+        (chapter) =>
+          html`<option
+            value="${esc(chapter.id)}"
+            ${item.chapterId === chapter.id ? "selected" : ""}
+          >
+            ${esc(chapter.title || chapter.id)}
+          </option>`,
+      )}
+    </select>
+    <textarea data-relation-history-note placeholder="Was verändert sich?">
+${esc(item.note || "")}</textarea
+    >
+    <button
+      type="button"
+      class="button small subtle"
+      data-relation-history-remove
+      aria-label="Verlaufseintrag entfernen"
+    >
+      ×
+    </button>
+  </div>`;
+}
+
+function relationHistoryEditor(history = []) {
+  return html`<div class="wiki-relation-history">
+    <strong>Entwicklung je Kapitel</strong>
+    <div class="wiki-relation-history-list" data-relation-history-list>
+      ${history.map(relationHistoryEntry).join("")}
+    </div>
+    <button type="button" class="button small" data-relation-history-add>
+      ＋ Kapitelnotiz
+    </button>
+  </div>`;
+}
+
 function wikiRelationEditor(kind, entry) {
   if (kind === "character") {
     const others = state.project.characters.filter(
@@ -1711,6 +1761,7 @@ function wikiRelationEditor(kind, entry) {
                 ${relation.bidirectional ? "checked" : ""}
               />Beidseitig</label
             >
+            ${relationHistoryEditor(relation.history || [])}
             <button
               type="button"
               class="button subtle"
@@ -2311,18 +2362,23 @@ function renderProgress() {
     : '<div class="quiet">Dein Schreibverlauf erscheint hier, sobald du schreibst.</div>';
   return html`${heading(
       "Statistiken",
-      html`<label class="goal-form"
-        ><span class="small-note">Manuskriptziel</span
-        ><input
-          id="goal-input"
-          type="number"
-          min="0"
-          step="1000"
-          value="${project.goal}"
-        /><button class="button small" data-action="save-goal">
-          Speichern
-        </button></label
-      >`,
+      html`<div class="heading-actions">
+        <label class="goal-form"
+          ><span class="small-note">Manuskriptziel</span
+          ><input
+            id="goal-input"
+            type="number"
+            min="0"
+            step="1000"
+            value="${project.goal}"
+          /><button class="button small" data-action="save-goal">
+            Speichern
+          </button></label
+        >
+        <button class="button" data-action="export-manuscript">
+          Manuskript exportieren
+        </button>
+      </div>`,
     )}
     <div class="stat-grid">
       <section class="stat-card">
@@ -2370,6 +2426,245 @@ function renderProgress() {
         .join("") ||
       '<div class="small-note">Noch keine Kapitel vorhanden.</div>'}
     </div>`;
+}
+
+function renderTimeline() {
+  const chapters = [...state.project.chapters].sort(
+    (left, right) => (left.order ?? 9999) - (right.order ?? 9999),
+  );
+  const events = [...(state.project.timelineEvents || [])].sort(
+    (left, right) => left.order - right.order,
+  );
+  const stops = events
+    .map((event, index) => {
+      const chapter = chapters.find((item) => item.id === event.chapterId);
+      const side = index % 2 === 0 ? "above" : "below";
+      return html`<article class="timeline-stop" data-side="${side}">
+        <div class="timeline-point">
+          <span class="timeline-point-dot"></span>
+          <span class="timeline-point-date"
+            >${esc(event.when || "Zeitpunkt offen")}</span
+          >
+        </div>
+        <section class="timeline-event-card">
+          <div class="timeline-event-options">
+            <button
+              class="timeline-options-button"
+              data-action="timeline-options"
+              aria-label="Ereignisoptionen für ${esc(event.title)}"
+              aria-haspopup="true"
+              aria-expanded="false"
+            >
+              ⚙
+            </button>
+            <div class="timeline-event-menu" data-timeline-event-menu hidden>
+              <button
+                type="button"
+                data-action="timeline-move"
+                data-id="${esc(event.id)}"
+                data-direction="up"
+                ${index === 0 ? "disabled" : ""}
+              >
+                ← Nach links verschieben
+              </button>
+              <button
+                type="button"
+                data-action="timeline-move"
+                data-id="${esc(event.id)}"
+                data-direction="down"
+                ${index === events.length - 1 ? "disabled" : ""}
+              >
+                → Nach rechts verschieben
+              </button>
+              <button
+                type="button"
+                data-action="timeline-edit"
+                data-id="${esc(event.id)}"
+              >
+                Bearbeiten
+              </button>
+              <button
+                type="button"
+                class="danger"
+                data-action="timeline-delete"
+                data-id="${esc(event.id)}"
+              >
+                Entfernen
+              </button>
+            </div>
+          </div>
+          <div class="timeline-event-heading">
+            <span class="timeline-event-index">${index + 1}</span>
+            <h2>${esc(event.title)}</h2>
+          </div>
+          ${chapter
+            ? html`<button
+                class="timeline-chapter"
+                data-action="write-chapter"
+                data-id="${esc(chapter.id)}"
+              >
+                ${esc(chapter.title || chapter.id)}
+              </button>`
+            : '<span class="timeline-chapter">Kein Kapitel zugeordnet</span>'}
+          ${event.description ? html`<p>${esc(event.description)}</p>` : ""}
+        </section>
+      </article>`;
+    })
+    .join("");
+  return html`${heading(
+      "Zeitstrahl",
+      html`<button class="button primary" data-action="timeline-add">
+        ＋ Ereignis hinzufügen
+      </button>`,
+    )}
+    <div class="timeline-zoom-controls" aria-label="Zeitstrahl-Zoom">
+      <span>Zoom</span>
+      <button
+        class="timeline-zoom-button"
+        data-action="timeline-zoom"
+        data-direction="out"
+        aria-label="Zeitstrahl verkleinern"
+        ${state.timelineZoom <= 50 ? "disabled" : ""}
+      >
+        −
+      </button>
+      <output data-timeline-zoom-label>${state.timelineZoom}%</output>
+      <button
+        class="timeline-zoom-button"
+        data-action="timeline-zoom"
+        data-direction="in"
+        aria-label="Zeitstrahl vergrößern"
+        ${state.timelineZoom >= 160 ? "disabled" : ""}
+      >
+        +
+      </button>
+      <span class="small-note">Strg + / Strg − · seitlich scrollen</span>
+    </div>
+    <div class="timeline-scroll">
+      ${events.length
+        ? html`<div
+            class="timeline-canvas"
+            style="--timeline-column-width:${Math.round(
+              280 * (state.timelineZoom / 100),
+            )}px"
+          >
+            ${stops}
+          </div>`
+        : '<div class="timeline-empty"><strong>Noch keine Ereignisse</strong><span>Füge Ereignisse hinzu, um deine Geschichte entlang einer Achse zu ordnen.</span></div>'}
+    </div>`;
+}
+
+function setTimelineZoom(value) {
+  state.timelineZoom = Math.min(160, Math.max(50, Number(value) || 100));
+  localStorage.setItem("mycel-timeline-zoom", String(state.timelineZoom));
+  const canvas = document.querySelector(".timeline-canvas");
+  canvas?.style.setProperty(
+    "--timeline-column-width",
+    `${Math.round(280 * (state.timelineZoom / 100))}px`,
+  );
+  const label = document.querySelector("[data-timeline-zoom-label]");
+  if (label) label.value = `${state.timelineZoom}%`;
+  document
+    .querySelectorAll('[data-action="timeline-zoom"]')
+    .forEach((button) => {
+      button.disabled =
+        (button.dataset.direction === "out" && state.timelineZoom <= 50) ||
+        (button.dataset.direction === "in" && state.timelineZoom >= 160);
+    });
+}
+
+function editTimelineEvent(existing = null) {
+  const chapters = [...state.project.chapters].sort(
+    (left, right) => (left.order ?? 9999) - (right.order ?? 9999),
+  );
+  openDialog(
+    existing ? "Ereignis bearbeiten" : "Ereignis hinzufügen",
+    html`<div class="form-grid">
+      <label class="field full"
+        >Ereignis<input
+          name="title"
+          value="${esc(existing?.title || "")}"
+          required
+          autofocus
+        />
+      </label>
+      <label class="field full"
+        >Zeitpunkt<input
+          name="when"
+          value="${esc(existing?.when || "")}"
+          placeholder="Zum Beispiel: Jahr 12, erster Frühling"
+        />
+      </label>
+      <label class="field full"
+        >Kapitel<select name="chapterId">
+          <option value="">Keinem Kapitel zuordnen</option>
+          ${chapters.map(
+            (chapter) =>
+              html`<option
+                value="${esc(chapter.id)}"
+                ${existing?.chapterId === chapter.id ? "selected" : ""}
+              >
+                ${esc(chapter.title || chapter.id)}
+              </option>`,
+          )}
+        </select>
+      </label>
+      <label class="field full"
+        >Notiz<textarea name="description">
+${esc(existing?.description || "")}</textarea
+        >
+      </label>
+    </div>`,
+    async (data) => {
+      const title = String(data.get("title") || "").trim();
+      if (!title) return false;
+      const events = [...(state.project.timelineEvents || [])];
+      const next = {
+        id: existing?.id || `event-${Date.now()}`,
+        title,
+        when: String(data.get("when") || "").trim(),
+        chapterId: String(data.get("chapterId") || ""),
+        description: String(data.get("description") || "").trim(),
+        order: existing?.order ?? events.length,
+      };
+      const index = events.findIndex((event) => event.id === next.id);
+      if (index < 0) events.push(next);
+      else events[index] = next;
+      state.project = await api.saveTimeline(events);
+      render();
+      toast("Ereignis gespeichert.");
+      return true;
+    },
+    existing ? "Änderungen speichern" : "Ereignis hinzufügen",
+  );
+}
+
+function openManuscriptExport() {
+  openDialog(
+    "Manuskript exportieren",
+    html`<div class="form-grid">
+      <label class="field full"
+        >Titel<input name="title" value="${esc(state.project.name)}" />
+      </label>
+      <label class="field full"
+        >Format<select name="format">
+          <option value="docx">Word-Dokument (.docx)</option>
+          <option value="pdf">PDF (.pdf)</option>
+          <option value="epub">E-Book (.epub)</option>
+        </select>
+      </label>
+    </div>`,
+    async (data) => {
+      const result = await api.exportManuscript({
+        title: String(data.get("title") || "").trim(),
+        format: data.get("format"),
+      });
+      if (result?.path)
+        toast(`Export gespeichert: ${result.path.split(/[\\/]/).pop()}`);
+      return true;
+    },
+    "Exportieren",
+  );
 }
 
 function escapeRegex(value) {
@@ -2508,6 +2803,7 @@ function render() {
   else if (state.page === "places") page.innerHTML = renderPlaces();
   else if (state.page === "knowledge") page.innerHTML = renderKnowledge();
   else if (state.page === "writing") page.innerHTML = renderWriting();
+  else if (state.page === "timeline") page.innerHTML = renderTimeline();
   else if (state.page === "progress") page.innerHTML = renderProgress();
   if (state.page === "chapters") applyChapterFilters();
   if (state.page === "wiki") applyWikiFilters();
@@ -3070,10 +3366,29 @@ function openCharacter(ch) {
         (item) => item.id === rel.target,
       );
       return target
-        ? html`<div class="relation-chip">
-            <strong
-              >${rel.bidirectional ? "↔" : "→"} ${esc(target.name)}</strong
-            ><span>${esc(rel.type)}</span>
+        ? html`<div class="relation-item">
+            <div class="relation-chip">
+              <strong
+                >${rel.bidirectional ? "↔" : "→"} ${esc(target.name)}</strong
+              ><span>${esc(rel.type)}</span>
+            </div>
+            ${(rel.history || []).length
+              ? html`<div class="relation-history">
+                  ${rel.history
+                    .map((item) => {
+                      const chapter = state.project.chapters.find(
+                        (entry) => entry.id === item.chapterId,
+                      );
+                      return html`<p>
+                        <strong
+                          >${esc(chapter?.title || item.chapterId)}</strong
+                        >
+                        ${esc(item.note)}
+                      </p>`;
+                    })
+                    .join("")}
+                </div>`
+              : ""}
           </div>`
         : "";
     })
@@ -3724,6 +4039,14 @@ async function removeRecentProject(root) {
 }
 
 document.addEventListener("click", async (event) => {
+  if (!event.target.closest('[data-action="timeline-options"]')) {
+    document.querySelectorAll("[data-timeline-event-menu]").forEach((menu) => {
+      menu.hidden = true;
+    });
+    document
+      .querySelectorAll('[data-action="timeline-options"]')
+      .forEach((button) => button.setAttribute("aria-expanded", "false"));
+  }
   const pageNavigation = event.target.closest("[data-page]");
   if (pageNavigation && state.wikiEditing) {
     toast("Speichere oder brich die Bearbeitung erst ab.");
@@ -3868,6 +4191,7 @@ document.addEventListener("click", async (event) => {
             data-relation-bidirectional
           />Beidseitig</label
         >
+        ${relationHistoryEditor([])}
         <button type="button" class="button subtle" data-wiki-remove-relation>
           Entfernen
         </button>`;
@@ -3899,6 +4223,23 @@ document.addEventListener("click", async (event) => {
         </button>`;
     }
     host.append(row);
+    return;
+  }
+  const addRelationHistory = event.target.closest(
+    "[data-relation-history-add]",
+  );
+  if (addRelationHistory) {
+    const list = addRelationHistory
+      .closest(".wiki-relation-history")
+      .querySelector("[data-relation-history-list]");
+    list.insertAdjacentHTML("beforeend", relationHistoryEntry());
+    return;
+  }
+  const removeRelationHistory = event.target.closest(
+    "[data-relation-history-remove]",
+  );
+  if (removeRelationHistory) {
+    removeRelationHistory.closest("[data-relation-history-entry]").remove();
     return;
   }
   const removeWikiRelation = event.target.closest(
@@ -4047,6 +4388,61 @@ document.addEventListener("click", async (event) => {
     );
     if (ch) editChapterForm(ch);
   }
+  if (action === "timeline-options") {
+    const menu = button.parentElement.querySelector(
+      "[data-timeline-event-menu]",
+    );
+    const open = menu.hidden;
+    document.querySelectorAll("[data-timeline-event-menu]").forEach((item) => {
+      item.hidden = true;
+    });
+    document
+      .querySelectorAll('[data-action="timeline-options"]')
+      .forEach((item) => item.setAttribute("aria-expanded", "false"));
+    if (open) {
+      menu.hidden = false;
+      button.setAttribute("aria-expanded", "true");
+    }
+    return;
+  }
+  if (action === "timeline-zoom")
+    setTimelineZoom(
+      state.timelineZoom + (button.dataset.direction === "in" ? 10 : -10),
+    );
+  else if (action === "timeline-add") editTimelineEvent();
+  else if (action === "timeline-edit") {
+    const event = state.project.timelineEvents.find(
+      (item) => item.id === button.dataset.id,
+    );
+    if (event) editTimelineEvent(event);
+  } else if (action === "timeline-delete") {
+    const event = state.project.timelineEvents.find(
+      (item) => item.id === button.dataset.id,
+    );
+    if (
+      event &&
+      confirm(`Ereignis „${event.title}“ aus dem Zeitstrahl entfernen?`)
+    ) {
+      state.project = await api.saveTimeline(
+        state.project.timelineEvents.filter((item) => item.id !== event.id),
+      );
+      render();
+      toast("Ereignis entfernt.");
+    }
+  } else if (action === "timeline-move") {
+    const events = [...state.project.timelineEvents].sort(
+      (left, right) => left.order - right.order,
+    );
+    const index = events.findIndex((item) => item.id === button.dataset.id);
+    const offset = button.dataset.direction === "up" ? -1 : 1;
+    const target = index + offset;
+    if (index >= 0 && target >= 0 && target < events.length) {
+      [events[index], events[target]] = [events[target], events[index]];
+      events.forEach((event, position) => (event.order = position));
+      state.project = await api.saveTimeline(events);
+      render();
+    }
+  } else if (action === "export-manuscript") openManuscriptExport();
   if (action === "create-project") createProject();
   else if (action === "choose-world-map") void chooseWorldMap();
   else if (action === "open-project") void openProject();
@@ -4081,6 +4477,21 @@ document.addEventListener("click", async (event) => {
     render();
     toast("Manuskriptziel gespeichert.");
   }
+});
+document.addEventListener("keydown", (event) => {
+  if (
+    state.page !== "timeline" ||
+    dialog.open ||
+    (!event.ctrlKey && !event.metaKey) ||
+    event.altKey
+  )
+    return;
+  const zoomIn =
+    event.key === "+" || event.key === "=" || event.code === "NumpadAdd";
+  const zoomOut = event.key === "-" || event.code === "NumpadSubtract";
+  if (!zoomIn && !zoomOut) return;
+  event.preventDefault();
+  setTimelineZoom(state.timelineZoom + (zoomIn ? 10 : -10));
 });
 document.addEventListener("input", (event) => {
   if (event.target.matches("#chapter-search")) applyChapterFilters();
@@ -4180,6 +4591,15 @@ document.addEventListener("submit", async (event) => {
         type: row.querySelector("[data-relation-type]").value.trim(),
         bidirectional: row.querySelector("[data-relation-bidirectional]")
           .checked,
+        history: [...row.querySelectorAll("[data-relation-history-entry]")]
+          .map((item) => ({
+            chapterId: item.querySelector("[data-relation-history-chapter]")
+              .value,
+            note: item
+              .querySelector("[data-relation-history-note]")
+              .value.trim(),
+          }))
+          .filter((item) => item.chapterId && item.note),
       }))
       .filter((relation) => relation.target && relation.type);
   }

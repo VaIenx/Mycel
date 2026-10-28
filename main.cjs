@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain } = require("electron");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const zlib = require("node:zlib");
 const { fileURLToPath, pathToFileURL } = require("node:url");
 
 let windowRef;
@@ -84,6 +85,219 @@ function localDateKey() {
     String(date.getMonth() + 1).padStart(2, "0"),
     String(date.getDate()).padStart(2, "0"),
   ].join("-");
+}
+
+function escapeHtml(value = "") {
+  return String(value).replace(
+    /[&<>\"]/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[character],
+  );
+}
+
+function escapeXml(value = "") {
+  return escapeHtml(value).replace(/'/g, "&apos;");
+}
+
+function crc32(buffer) {
+  let crc = 0xffffffff;
+  for (const byte of buffer) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit++)
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function createZip(files) {
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  for (const file of files) {
+    const name = Buffer.from(file.name, "utf8");
+    const source = Buffer.isBuffer(file.content)
+      ? file.content
+      : Buffer.from(file.content, "utf8");
+    const compressed = file.store
+      ? source
+      : zlib.deflateRawSync(source, { level: 6 });
+    const checksum = crc32(source);
+    const method = file.store ? 0 : 8;
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x0800, 6);
+    local.writeUInt16LE(method, 8);
+    local.writeUInt32LE(checksum, 14);
+    local.writeUInt32LE(compressed.length, 18);
+    local.writeUInt32LE(source.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    localParts.push(local, name, compressed);
+
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(0x0314, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0x0800, 8);
+    central.writeUInt16LE(method, 10);
+    central.writeUInt32LE(checksum, 16);
+    central.writeUInt32LE(compressed.length, 20);
+    central.writeUInt32LE(source.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(0, 38);
+    central.writeUInt32LE(offset, 42);
+    centralParts.push(central, name);
+    offset += local.length + name.length + compressed.length;
+  }
+  const centralDirectory = Buffer.concat(centralParts);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(files.length, 8);
+  end.writeUInt16LE(files.length, 10);
+  end.writeUInt32LE(centralDirectory.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...localParts, centralDirectory, end]);
+}
+
+function manuscriptPlainText(chapter) {
+  return String(chapter.body || "")
+    .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "")
+    .replace(/!?\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "$1")
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/^\s*[-*]\s+/gm, "• ")
+    .trim();
+}
+
+function exportDocumentHtml(title, chapters) {
+  const content = chapters
+    .map(
+      (chapter, index) =>
+        `<section class="chapter${index ? " next" : ""}"><h2>${escapeHtml(chapter.title || chapter.id)}</h2>${manuscriptPlainText(
+          chapter,
+        )
+          .split(/\r?\n\s*\r?\n/)
+          .map(
+            (paragraph) =>
+              `<p>${escapeHtml(paragraph).replace(/\r?\n/g, "<br>")}</p>`,
+          )
+          .join("")}</section>`,
+    )
+    .join("");
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>@page{size:A4;margin:23mm 24mm}body{font:11pt Georgia,serif;line-height:1.55;color:#222}h1{font-size:28pt;text-align:center;margin:35vh 0 0;page-break-after:always}h2{font-size:18pt;page-break-before:always;margin:0 0 1.5em}.chapter:first-of-type h2{page-break-before:auto}p{margin:0 0 1em;text-align:justify;orphans:3;widows:3}</style></head><body><h1>${escapeHtml(title)}</h1>${content}</body></html>`;
+}
+
+function wordXml(text) {
+  return String(text)
+    .split(/\r?\n/)
+    .map(
+      (line, index) =>
+        `${index ? "<w:r><w:br/></w:r>" : ""}<w:r><w:t xml:space="preserve">${escapeXml(line)}</w:t></w:r>`,
+    )
+    .join("");
+}
+
+function createDocx(title, chapters) {
+  const paragraphs = [
+    `<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr>${wordXml(title)}</w:p>`,
+    ...chapters.flatMap((chapter) => [
+      `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr>${wordXml(chapter.title || chapter.id)}</w:p>`,
+      ...manuscriptPlainText(chapter)
+        .split(/\r?\n\s*\r?\n/)
+        .map((paragraph) => `<w:p>${wordXml(paragraph)}</w:p>`),
+    ]),
+  ].join("");
+  return createZip([
+    {
+      name: "[Content_Types].xml",
+      content:
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>',
+    },
+    {
+      name: "_rels/.rels",
+      content:
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+    },
+    {
+      name: "word/document.xml",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraphs}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1304" w:right="1361" w:bottom="1304" w:left="1361" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>`,
+    },
+    {
+      name: "word/_rels/document.xml.rels",
+      content:
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
+    },
+    {
+      name: "word/styles.xml",
+      content:
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:sz w:val="22"/></w:rPr><w:pPr><w:spacing w:after="200" w:line="360" w:lineRule="auto"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr><w:pPr><w:jc w:val="center"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:rPr><w:b/><w:sz w:val="30"/></w:rPr><w:pPr><w:pageBreakBefore/></w:pPr></w:style></w:styles>',
+    },
+  ]);
+}
+
+function createEpub(title, chapters) {
+  const chapterFiles = chapters.map((chapter, index) => {
+    const fileName = `chapter-${index + 1}.xhtml`;
+    const paragraphs = manuscriptPlainText(chapter)
+      .split(/\r?\n\s*\r?\n/)
+      .map(
+        (paragraph) =>
+          `<p>${escapeHtml(paragraph).replace(/\r?\n/g, "<br/>")}</p>`,
+      )
+      .join("");
+    return {
+      name: `OEBPS/${fileName}`,
+      content: `<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml" lang="de"><head><title>${escapeHtml(chapter.title || chapter.id)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head><body><h1>${escapeHtml(chapter.title || chapter.id)}</h1>${paragraphs}</body></html>`,
+      title: chapter.title || chapter.id,
+      fileName,
+    };
+  });
+  const manifest = chapterFiles
+    .map(
+      (chapter, index) =>
+        `<item id="chapter-${index + 1}" href="${chapter.fileName}" media-type="application/xhtml+xml"/>`,
+    )
+    .join("");
+  const spine = chapterFiles
+    .map((_, index) => `<itemref idref="chapter-${index + 1}"/>`)
+    .join("");
+  const nav = chapterFiles
+    .map(
+      (chapter) =>
+        `<li><a href="${chapter.fileName}">${escapeHtml(chapter.title)}</a></li>`,
+    )
+    .join("");
+  return createZip([
+    {
+      name: "mimetype",
+      content: "application/epub+zip",
+      store: true,
+    },
+    {
+      name: "META-INF/container.xml",
+      content:
+        '<?xml version="1.0" encoding="UTF-8"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>',
+    },
+    {
+      name: "OEBPS/content.opf",
+      content: `<?xml version="1.0" encoding="UTF-8"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id" xml:lang="de"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="book-id">urn:mycel:${Date.now()}</dc:identifier><dc:title>${escapeXml(title)}</dc:title><dc:language>de</dc:language></metadata><manifest><item id="nav" href="nav.xhtml" properties="nav" media-type="application/xhtml+xml"/><item id="style" href="style.css" media-type="text/css"/><item id="title" href="title.xhtml" media-type="application/xhtml+xml"/>${manifest}</manifest><spine><itemref idref="title"/>${spine}</spine></package>`,
+    },
+    {
+      name: "OEBPS/title.xhtml",
+      content: `<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml" lang="de"><head><title>${escapeHtml(title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head><body><h1>${escapeHtml(title)}</h1></body></html>`,
+    },
+    {
+      name: "OEBPS/nav.xhtml",
+      content: `<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="de"><head><title>Inhalt</title></head><body><nav epub:type="toc"><h1>Inhalt</h1><ol>${nav}</ol></nav></body></html>`,
+    },
+    {
+      name: "OEBPS/style.css",
+      content:
+        "body{font-family:Georgia,serif;line-height:1.55;margin:5%}h1{font-size:1.5em;margin:0 0 1.5em}p{margin:0 0 1em;text-align:justify}",
+    },
+    ...chapterFiles,
+  ]);
 }
 
 async function readProject() {
@@ -282,6 +496,9 @@ async function readProject() {
     chapterStatuses: metadata.chapterStatuses || [],
     chapterStatusColors: metadata.chapterStatusColors || {},
     history: metadata.history || [],
+    timelineEvents: Array.isArray(metadata.timelineEvents)
+      ? metadata.timelineEvents
+      : [],
   };
 }
 
@@ -504,6 +721,14 @@ function registerIpc() {
               target: String(rel.target),
               type: String(rel.type),
               bidirectional: Boolean(rel.bidirectional),
+              history: Array.isArray(rel.history)
+                ? rel.history
+                    .filter((item) => item && item.chapterId && item.note)
+                    .map((item) => ({
+                      chapterId: String(item.chapterId),
+                      note: String(item.note),
+                    }))
+                : [],
             }))
         : [],
     };
@@ -540,6 +765,7 @@ ${record.description}
         target: id,
         type: relation.type,
         bidirectional: true,
+        history: relation.history,
       });
     }
     await writeMetadata({ characters });
@@ -782,6 +1008,87 @@ ${record.description}
     else history.push({ date: today, words: Number(entry.words) || 0 });
     await writeMetadata({ history: history.slice(-365) });
     return history;
+  });
+  ipcMain.handle("timeline:save", async (_event, eventValues) => {
+    const project = await readProject();
+    const chapterIds = new Set(project.chapters.map((chapter) => chapter.id));
+    const timelineEvents = (Array.isArray(eventValues) ? eventValues : [])
+      .filter((event) => event && event.title)
+      .map((event, index) => ({
+        id: safeId(event.id || `event-${Date.now()}-${index}`),
+        title: String(event.title).trim(),
+        when: String(event.when || "").trim(),
+        description: String(event.description || ""),
+        chapterId: chapterIds.has(String(event.chapterId || ""))
+          ? String(event.chapterId)
+          : "",
+        order: Number.isFinite(Number(event.order))
+          ? Number(event.order)
+          : index,
+      }));
+    await writeMetadata({ timelineEvents });
+    return readProject();
+  });
+  ipcMain.handle("manuscript:export", async (_event, options = {}) => {
+    const project = await readProject();
+    const format = String(options.format || "pdf").toLowerCase();
+    if (!["docx", "pdf", "epub"].includes(format))
+      throw new Error("Unbekanntes Exportformat.");
+    const chapters = project.chapters
+      .map((chapter) => ({ ...chapter, title: chapter.title || chapter.id }))
+      .sort(
+        (left, right) =>
+          (left.order ?? 9999) - (right.order ?? 9999) ||
+          left.id.localeCompare(right.id),
+      );
+    if (!chapters.length) throw new Error("Das Projekt enthält keine Kapitel.");
+    const title = String(options.title || project.name).trim() || project.name;
+    const extension = format;
+    const result = await dialog.showSaveDialog(windowRef, {
+      title: "Manuskript exportieren",
+      defaultPath: path.join(projectRoot, `${safeId(title)}.${extension}`),
+      filters: [
+        {
+          name: format.toUpperCase(),
+          extensions: [extension],
+        },
+      ],
+    });
+    if (result.canceled || !result.filePath) return { canceled: true };
+    if (format === "pdf") {
+      const printWindow = new BrowserWindow({
+        show: false,
+        webPreferences: { sandbox: true },
+      });
+      const temporaryHtmlPath = path.join(
+        app.getPath("temp"),
+        `mycel-export-${process.pid}-${Date.now()}.html`,
+      );
+      try {
+        await fs.writeFile(
+          temporaryHtmlPath,
+          exportDocumentHtml(title, chapters),
+          "utf8",
+        );
+        await printWindow.loadFile(temporaryHtmlPath);
+        const pdf = await printWindow.webContents.printToPDF({
+          pageSize: "A4",
+          printBackground: true,
+          margins: { top: 0.9, right: 0.9, bottom: 0.9, left: 0.9 },
+        });
+        await fs.writeFile(result.filePath, pdf);
+      } finally {
+        printWindow.close();
+        await fs.rm(temporaryHtmlPath, { force: true });
+      }
+    } else {
+      const archive =
+        format === "docx"
+          ? createDocx(title, chapters)
+          : createEpub(title, chapters);
+      await fs.writeFile(result.filePath, archive);
+    }
+    return { path: result.filePath };
   });
 }
 

@@ -1137,6 +1137,330 @@ select {
   white-space: nowrap;
   font-size: 11px;
 }
+.wiki-relation-history {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #d2dbcf;
+  border-radius: 5px;
+  background: #f1f4eb;
+}
+.wiki-relation-history > strong {
+  color: var(--muted);
+  font-size: 11px;
+}
+.wiki-relation-history-list {
+  display: grid;
+  gap: 7px;
+}
+.wiki-relation-history-entry {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.8fr) minmax(180px, 1.5fr) 30px;
+  gap: 7px;
+  align-items: start;
+}
+.wiki-relation-history-entry select,
+.wiki-relation-history-entry textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid #bac9bc;
+  border-radius: 4px;
+  background: #f8f8f1;
+  font: inherit;
+  font-size: 12px;
+}
+.wiki-relation-history-entry textarea {
+  min-height: 34px;
+  resize: vertical;
+}
+.relation-item {
+  display: grid;
+  gap: 5px;
+}
+.relation-history {
+  padding-left: 12px;
+  border-left: 2px solid #bdcbbb;
+}
+.relation-history p {
+  margin: 3px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.relation-history strong {
+  color: var(--ink);
+}
+.timeline-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 16px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.timeline-zoom-button {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #c4d0c1;
+  border-radius: 4px;
+  background: transparent;
+  color: #4b6352;
+  font-size: 15px;
+}
+.timeline-zoom-controls output {
+  min-width: 38px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.timeline-zoom-controls .small-note {
+  margin-left: 5px;
+  font-size: 11px;
+}
+.timeline-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px 0 18px;
+  scrollbar-width: thin;
+  scrollbar-color: #8da48e #e7ebdf;
+}
+.timeline-scroll::-webkit-scrollbar {
+  height: 10px;
+}
+.timeline-scroll::-webkit-scrollbar-track {
+  border-radius: 8px;
+  background: #e7ebdf;
+}
+.timeline-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid #e7ebdf;
+  border-radius: 8px;
+  background: #8da48e;
+}
+.timeline-canvas {
+  --timeline-column-width: 280px;
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: var(--timeline-column-width);
+  grid-template-rows: minmax(230px, 1fr) 54px minmax(230px, 1fr);
+  width: max-content;
+  min-width: 100%;
+  min-height: 620px;
+  padding: 14px 18px;
+  isolation: isolate;
+}
+.timeline-canvas::before {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  z-index: 0;
+  height: 2px;
+  background: #758d79;
+  content: "";
+}
+.timeline-stop {
+  z-index: 1;
+  display: grid;
+  grid-row: 1 / 4;
+  grid-template-rows: subgrid;
+  min-width: 0;
+  padding: 0 12px;
+}
+.timeline-point {
+  position: relative;
+  display: flex;
+  grid-row: 2;
+  align-items: center;
+  min-width: 0;
+}
+.timeline-point-dot {
+  position: absolute;
+  left: 50%;
+  z-index: 2;
+  width: 15px;
+  height: 15px;
+  border: 3px solid #eff2e9;
+  border-radius: 50%;
+  background: #426553;
+  box-shadow: 0 0 0 2px #426553;
+  transform: translateX(-50%);
+}
+.timeline-point-date {
+  position: absolute;
+  left: 50%;
+  z-index: 3;
+  max-width: calc(100% - 26px);
+  overflow: hidden;
+  padding: 3px 7px;
+  border: 1px solid #c2cebe;
+  border-radius: 10px;
+  background: #f2f3e9;
+  color: #425a4a;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translate(-50%, -21px);
+}
+.timeline-stop[data-side="above"] .timeline-point-date {
+  transform: translate(-50%, 21px);
+}
+.timeline-event-card {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #afc1ae;
+  border-radius: 8px;
+  background: #f1f3e9;
+  box-shadow: 0 4px 12px #2d463417;
+}
+.timeline-stop[data-side="above"] .timeline-event-card {
+  grid-row: 1;
+  align-self: end;
+  margin-bottom: 3px;
+}
+.timeline-stop[data-side="below"] .timeline-event-card {
+  grid-row: 3;
+  align-self: start;
+  margin-top: 3px;
+}
+.timeline-stop[data-side="above"] .timeline-event-card::after,
+.timeline-stop[data-side="below"] .timeline-event-card::before {
+  position: absolute;
+  left: 50%;
+  width: 1px;
+  height: 32px;
+  background: #8aa08a;
+  content: "";
+}
+.timeline-stop[data-side="above"] .timeline-event-card::after {
+  top: 100%;
+}
+.timeline-stop[data-side="below"] .timeline-event-card::before {
+  bottom: 100%;
+}
+.timeline-event-heading {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.timeline-event-heading h2 {
+  margin: 0;
+  font: 19px/1.25 var(--serif);
+}
+.timeline-event-index {
+  display: grid;
+  flex: 0 0 25px;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border-radius: 50%;
+  background: #dbe5d7;
+  color: #365142;
+  font-size: 11px;
+  font-weight: 700;
+}
+.timeline-chapter {
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #58705e;
+  font-size: 12px;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.timeline-event-card > p {
+  margin: 0;
+  color: #4d5d50;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.timeline-event-heading {
+  padding-right: 24px;
+}
+.timeline-event-options {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 4;
+}
+.timeline-options-button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #6b7e6e;
+  font-size: 15px;
+}
+.timeline-options-button:hover,
+.timeline-options-button[aria-expanded="true"] {
+  background: #e1e9dc;
+  color: #304b3a;
+}
+.timeline-event-menu {
+  position: absolute;
+  top: 27px;
+  right: 0;
+  display: grid;
+  min-width: 176px;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid #bac9b8;
+  border-radius: 6px;
+  background: #f5f6ed;
+  box-shadow: 0 5px 14px #243b3222;
+}
+.timeline-event-menu[hidden] {
+  display: none;
+}
+.timeline-event-menu button {
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #405648;
+  font-size: 12px;
+  text-align: left;
+}
+.timeline-event-menu button:hover:not(:disabled) {
+  background: #e7ecdf;
+}
+.timeline-event-menu button:disabled {
+  opacity: 0.45;
+}
+.timeline-event-menu button.danger {
+  color: #8a4b43;
+}
+.timeline-empty {
+  grid-column: 1 / -1;
+  align-self: center;
+  display: grid;
+  gap: 6px;
+  width: min(100%, 360px);
+  margin: 0 auto;
+  padding: 25px;
+  border: 1px dashed #a8bba8;
+  border-radius: 8px;
+  background: #f1f3e9;
+  color: var(--muted);
+  text-align: center;
+}
+.timeline-empty strong {
+  color: var(--ink);
+}
 .wiki-entity-section h3 {
   margin-bottom: 8px;
 }
@@ -2775,5 +3099,8 @@ html[data-font="sans"] {
   }
   .wiki-edit-relation {
     grid-template-columns: 1fr 1fr;
+  }
+  .wiki-relation-history-entry {
+    grid-template-columns: 1fr;
   }
 }

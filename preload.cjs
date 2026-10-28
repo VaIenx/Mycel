@@ -22,4 +22,7 @@ contextBridge.exposeInMainWorld("mycel", {
   deleteKnowledge: (id) => ipcRenderer.invoke("knowledge:delete", id),
   saveSettings: (settings) => ipcRenderer.invoke("project:settings", settings),
   saveSession: (entry) => ipcRenderer.invoke("project:session", entry),
+  saveTimeline: (events) => ipcRenderer.invoke("timeline:save", events),
+  exportManuscript: (options) =>
+    ipcRenderer.invoke("manuscript:export", options),
 });
