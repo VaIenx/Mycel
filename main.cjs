@@ -96,7 +96,9 @@ function escapeHtml(value = "") {
 }
 
 function escapeXml(value = "") {
-  return escapeHtml(value).replace(/'/g, "&apos;");
+  return escapeHtml(value)
+    .replace(/'/g, "&apos;")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g, "");
 }
 
 function crc32(buffer) {
@@ -159,33 +161,214 @@ function createZip(files) {
   return Buffer.concat([...localParts, centralDirectory, end]);
 }
 
-function manuscriptPlainText(chapter) {
-  return String(chapter.body || "")
-    .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "")
-    .replace(/!?\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "$1")
-    .replace(/^#{1,6}\s*/gm, "")
-    .replace(/^\s*[-*]\s+/gm, "• ")
+function manuscriptInlineRuns(text) {
+  const source = String(text)
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\\([\\`*_{}\[\]()#+\-.!>])/g, "$1");
+  const tokenPattern =
+    /(\*\*[^*]+\*\*|__[^_]+__|(?<!\*)\*[^*]+\*(?!\*)|(?<!_)_[^_]+_(?!_)|~~[^~]+~~|`[^`]+`)/g;
+  return source
+    .split(tokenPattern)
+    .filter(Boolean)
+    .map((part) => {
+      if (part.startsWith("**") && part.endsWith("**"))
+        return { text: part.slice(2, -2), bold: true };
+      if (part.startsWith("__") && part.endsWith("__"))
+        return { text: part.slice(2, -2), bold: true };
+      if (part.startsWith("~~") && part.endsWith("~~"))
+        return { text: part.slice(2, -2), strike: true };
+      if (part.startsWith("`") && part.endsWith("`"))
+        return { text: part.slice(1, -1), code: true };
+      if (part.startsWith("*") && part.endsWith("*"))
+        return { text: part.slice(1, -1), italic: true };
+      if (part.startsWith("_") && part.endsWith("_"))
+        return { text: part.slice(1, -1), italic: true };
+      return { text: part };
+    });
+}
+
+function manuscriptInlineText(text) {
+  return manuscriptInlineRuns(text)
+    .map((run) => run.text)
+    .join("")
     .trim();
+}
+
+function manuscriptInlineHtml(runs) {
+  return runs
+    .map((run) => {
+      let value = escapeHtml(run.text);
+      if (run.code) value = `<code>${value}</code>`;
+      if (run.bold) value = `<strong>${value}</strong>`;
+      if (run.italic) value = `<em>${value}</em>`;
+      if (run.strike) value = `<del>${value}</del>`;
+      return value;
+    })
+    .join("");
+}
+
+function manuscriptBlocks(chapter) {
+  const source = String(chapter.body || "")
+    .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "")
+    .replace(/\r\n?/g, "\n");
+  const blocks = [];
+  let paragraph = [];
+  let list = [];
+  let listOrdered = false;
+  let listStart = 1;
+  let quote = [];
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    const runs = manuscriptInlineRuns(paragraph.join(" "));
+    const text = runs
+      .map((run) => run.text)
+      .join("")
+      .trim();
+    if (text) blocks.push({ type: "paragraph", text, runs });
+    paragraph = [];
+  };
+  const flushList = () => {
+    if (!list.length) return;
+    blocks.push({
+      type: "list",
+      ordered: listOrdered,
+      start: listStart,
+      items: list,
+    });
+    list = [];
+    listOrdered = false;
+    listStart = 1;
+  };
+  const flushQuote = () => {
+    if (!quote.length) return;
+    blocks.push({
+      type: "quote",
+      text: manuscriptInlineText(quote.join(" ")),
+      runs: manuscriptInlineRuns(quote.join(" ")),
+    });
+    quote = [];
+  };
+  const flushBlocks = () => {
+    flushParagraph();
+    flushList();
+    flushQuote();
+  };
+
+  for (const line of source.split("\n")) {
+    const value = line.trim();
+    if (!value) {
+      flushBlocks();
+      continue;
+    }
+    if (/^(?:\*\s*){3,}$|^(?:-{3,}|_{3,})$/.test(value)) {
+      flushBlocks();
+      blocks.push({ type: "scene" });
+      continue;
+    }
+    const heading = value.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      flushBlocks();
+      blocks.push({
+        type: "heading",
+        level: heading[1].length,
+        text: manuscriptInlineText(heading[2]),
+        runs: manuscriptInlineRuns(heading[2]),
+      });
+      continue;
+    }
+    const orderedItem = value.match(/^(\d+)[.)]\s+(.+)$/);
+    const unorderedItem = value.match(/^[-*+]\s+(.+)$/);
+    if (orderedItem || unorderedItem) {
+      const ordered = Boolean(orderedItem);
+      if (list.length && ordered !== listOrdered) flushList();
+      flushParagraph();
+      flushQuote();
+      const runs = manuscriptInlineRuns(
+        ordered ? orderedItem[2] : unorderedItem[1],
+      );
+      if (!list.length) {
+        listOrdered = ordered;
+        listStart = ordered ? Number(orderedItem[1]) : 1;
+      }
+      list.push({
+        runs,
+        text: runs
+          .map((run) => run.text)
+          .join("")
+          .trim(),
+      });
+      continue;
+    }
+    const quoteLine = value.match(/^>\s?(.*)$/);
+    if (quoteLine) {
+      flushParagraph();
+      flushList();
+      quote.push(quoteLine[1]);
+      continue;
+    }
+    flushList();
+    flushQuote();
+    paragraph.push(value);
+  }
+  flushBlocks();
+  return blocks;
+}
+
+function manuscriptHtmlBlocks(chapter) {
+  return manuscriptBlocks(chapter)
+    .map((block) => {
+      if (block.type === "paragraph")
+        return `<p>${manuscriptInlineHtml(block.runs)}</p>`;
+      if (block.type === "heading") {
+        const level = Math.min(6, block.level + 2);
+        return `<h${level}>${manuscriptInlineHtml(block.runs)}</h${level}>`;
+      }
+      if (block.type === "list")
+        return `<${block.ordered ? "ol" : "ul"}${
+          block.ordered && block.start !== 1 ? ` start="${block.start}"` : ""
+        }>${block.items
+          .map((item) => `<li>${manuscriptInlineHtml(item.runs)}</li>`)
+          .join("")}</${block.ordered ? "ol" : "ul"}>`;
+      if (block.type === "quote")
+        return `<blockquote><p>${manuscriptInlineHtml(block.runs)}</p></blockquote>`;
+      return '<div class="scene-break" role="separator" aria-label="Szenenwechsel">✦</div>';
+    })
+    .join("");
 }
 
 function exportDocumentHtml(title, chapters) {
   const content = chapters
     .map(
       (chapter, index) =>
-        `<section class="chapter${index ? " next" : ""}"><h2>${escapeHtml(chapter.title || chapter.id)}</h2>${manuscriptPlainText(
-          chapter,
-        )
-          .split(/\r?\n\s*\r?\n/)
-          .map(
-            (paragraph) =>
-              `<p>${escapeHtml(paragraph).replace(/\r?\n/g, "<br>")}</p>`,
-          )
-          .join("")}</section>`,
+        `<section class="chapter${index ? " next" : ""}"><h2>${escapeHtml(chapter.title || chapter.id)}</h2>${manuscriptHtmlBlocks(chapter)}</section>`,
     )
     .join("");
-  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>@page{size:A4;margin:23mm 24mm}body{font:11pt Georgia,serif;line-height:1.55;color:#222}h1{font-size:28pt;text-align:center;margin:35vh 0 0;page-break-after:always}h2{font-size:18pt;page-break-before:always;margin:0 0 1.5em}.chapter:first-of-type h2{page-break-before:auto}p{margin:0 0 1em;text-align:justify;orphans:3;widows:3}</style></head><body><h1>${escapeHtml(title)}</h1>${content}</body></html>`;
+  return `<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <title>${escapeHtml(title)}</title>
+    <style>
+      @page { size: A4; margin: 23mm 24mm; }
+      body { color: #222; font: 11pt Georgia, serif; line-height: 1.6; }
+      h1 { margin: 35vh 0 0; font-size: 28pt; text-align: center; page-break-after: always; }
+      h2 { margin: 0 0 1.5em; font-size: 18pt; page-break-before: always; page-break-after: avoid; }
+      .chapter:first-of-type h2 { page-break-before: auto; }
+      h3, h4, h5, h6 { margin: 1.4em 0 0.5em; page-break-after: avoid; }
+      p { margin: 0 0 1em; text-align: justify; orphans: 3; widows: 3; }
+      ol, ul { margin: 0 0 1em; padding-left: 1.5em; }
+      li { margin: 0.3em 0; }
+      blockquote { margin: 1em 2em; font-style: italic; }
+      code { font-family: Consolas, monospace; }
+      .scene-break { margin: 1.6em 0; text-align: center; letter-spacing: 0.5em; }
+    </style>
+  </head>
+  <body>
+    <h1>${escapeHtml(title)}</h1>
+    ${content}
+  </body>
+</html>`;
 }
 
 function wordXml(text) {
@@ -198,40 +381,141 @@ function wordXml(text) {
     .join("");
 }
 
+function wordRun(text, properties = "") {
+  return `<w:r>${properties}<w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r>`;
+}
+
+function wordInlineXml(runs, italic = false) {
+  return runs
+    .map((run) => {
+      const properties = [];
+      if (run.bold) properties.push("<w:b/>");
+      if (run.italic || italic) properties.push("<w:i/>");
+      if (run.strike) properties.push("<w:strike/>");
+      if (run.code)
+        properties.push('<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/>');
+      const format = properties.length
+        ? `<w:rPr>${properties.join("")}</w:rPr>`
+        : "";
+      return `<w:r>${format}<w:t xml:space="preserve">${escapeXml(run.text)}</w:t></w:r>`;
+    })
+    .join("");
+}
+
+function wordBlock(block) {
+  if (block.type === "paragraph")
+    return `<w:p>${wordInlineXml(block.runs)}</w:p>`;
+  if (block.type === "heading") {
+    const style = `Heading${Math.min(6, block.level + 1)}`;
+    return `<w:p><w:pPr><w:pStyle w:val="${style}"/></w:pPr>
+      ${wordInlineXml(block.runs)}
+    </w:p>`;
+  }
+  if (block.type === "list")
+    return block.items
+      .map((item, index) => {
+        const marker = block.ordered ? `${block.start + index}. ` : "• ";
+        return `<w:p><w:pPr><w:ind w:left="420" w:hanging="240"/></w:pPr>
+          ${wordInlineXml([{ text: marker }, ...item.runs])}
+        </w:p>`;
+      })
+      .join("");
+  if (block.type === "quote")
+    return `<w:p><w:pPr><w:ind w:left="720" w:right="360"/></w:pPr>
+      ${wordInlineXml(block.runs, true)}
+    </w:p>`;
+  return `<w:p><w:pPr><w:jc w:val="center"/></w:pPr>
+    ${wordRun("✦")}
+  </w:p>`;
+}
+
 function createDocx(title, chapters) {
   const paragraphs = [
     `<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr>${wordXml(title)}</w:p>`,
     ...chapters.flatMap((chapter) => [
       `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr>${wordXml(chapter.title || chapter.id)}</w:p>`,
-      ...manuscriptPlainText(chapter)
-        .split(/\r?\n\s*\r?\n/)
-        .map((paragraph) => `<w:p>${wordXml(paragraph)}</w:p>`),
+      ...manuscriptBlocks(chapter).map(wordBlock),
     ]),
   ].join("");
+  const headingStyles = [2, 3, 4, 5, 6]
+    .map((level) => {
+      const size = Math.max(20, 30 - level * 2);
+      return `<w:style w:type="paragraph" w:styleId="Heading${level}">
+  <w:name w:val="heading ${level}"/>
+  <w:basedOn w:val="Normal"/>
+  <w:next w:val="Normal"/>
+  <w:qFormat/>
+  <w:rPr><w:b/><w:sz w:val="${size}"/></w:rPr>
+  <w:pPr><w:keepNext/><w:spacing w:before="240" w:after="100"/></w:pPr>
+</w:style>`;
+    })
+    .join("");
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>
+    <w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:sz w:val="22"/></w:rPr>
+    <w:pPr><w:spacing w:after="180" w:line="360" w:lineRule="auto"/></w:pPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Title">
+    <w:name w:val="Title"/>
+    <w:basedOn w:val="Normal"/>
+    <w:next w:val="Normal"/>
+    <w:qFormat/>
+    <w:rPr><w:b/><w:sz w:val="36"/></w:rPr>
+    <w:pPr><w:jc w:val="center"/><w:spacing w:after="240"/></w:pPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading1">
+    <w:name w:val="heading 1"/>
+    <w:basedOn w:val="Normal"/>
+    <w:next w:val="Normal"/>
+    <w:qFormat/>
+    <w:rPr><w:b/><w:sz w:val="30"/></w:rPr>
+    <w:pPr><w:pageBreakBefore/><w:keepNext/><w:spacing w:after="300"/></w:pPr>
+  </w:style>
+  ${headingStyles}
+</w:styles>`;
   return createZip([
     {
       name: "[Content_Types].xml",
-      content:
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>',
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+</Types>`,
     },
     {
       name: "_rels/.rels",
-      content:
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`,
     },
     {
       name: "word/document.xml",
-      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraphs}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1304" w:right="1361" w:bottom="1304" w:left="1361" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>`,
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    ${paragraphs}
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="1304" w:right="1361" w:bottom="1304" w:left="1361" w:header="708" w:footer="708" w:gutter="0"/>
+    </w:sectPr>
+  </w:body>
+</w:document>`,
     },
     {
       name: "word/_rels/document.xml.rels",
-      content:
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`,
     },
     {
       name: "word/styles.xml",
-      content:
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:sz w:val="22"/></w:rPr><w:pPr><w:spacing w:after="200" w:line="360" w:lineRule="auto"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr><w:pPr><w:jc w:val="center"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:rPr><w:b/><w:sz w:val="30"/></w:rPr><w:pPr><w:pageBreakBefore/></w:pPr></w:style></w:styles>',
+      content: styles,
     },
   ]);
 }
@@ -239,16 +523,19 @@ function createDocx(title, chapters) {
 function createEpub(title, chapters) {
   const chapterFiles = chapters.map((chapter, index) => {
     const fileName = `chapter-${index + 1}.xhtml`;
-    const paragraphs = manuscriptPlainText(chapter)
-      .split(/\r?\n\s*\r?\n/)
-      .map(
-        (paragraph) =>
-          `<p>${escapeHtml(paragraph).replace(/\r?\n/g, "<br/>")}</p>`,
-      )
-      .join("");
     return {
       name: `OEBPS/${fileName}`,
-      content: `<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml" lang="de"><head><title>${escapeHtml(chapter.title || chapter.id)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head><body><h1>${escapeHtml(chapter.title || chapter.id)}</h1>${paragraphs}</body></html>`,
+      content: `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="de">
+  <head>
+    <title>${escapeHtml(chapter.title || chapter.id)}</title>
+    <link rel="stylesheet" type="text/css" href="style.css"/>
+  </head>
+  <body>
+    <h1>${escapeHtml(chapter.title || chapter.id)}</h1>
+    ${manuscriptHtmlBlocks(chapter)}
+  </body>
+</html>`,
       title: chapter.title || chapter.id,
       fileName,
     };
@@ -276,25 +563,63 @@ function createEpub(title, chapters) {
     },
     {
       name: "META-INF/container.xml",
-      content:
-        '<?xml version="1.0" encoding="UTF-8"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>',
+      content: `<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`,
     },
     {
       name: "OEBPS/content.opf",
-      content: `<?xml version="1.0" encoding="UTF-8"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id" xml:lang="de"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="book-id">urn:mycel:${Date.now()}</dc:identifier><dc:title>${escapeXml(title)}</dc:title><dc:language>de</dc:language></metadata><manifest><item id="nav" href="nav.xhtml" properties="nav" media-type="application/xhtml+xml"/><item id="style" href="style.css" media-type="text/css"/><item id="title" href="title.xhtml" media-type="application/xhtml+xml"/>${manifest}</manifest><spine><itemref idref="title"/>${spine}</spine></package>`,
+      content: `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id" xml:lang="de">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="book-id">urn:mycel:${Date.now()}</dc:identifier>
+    <dc:title>${escapeXml(title)}</dc:title>
+    <dc:language>de</dc:language>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" properties="nav" media-type="application/xhtml+xml"/>
+    <item id="style" href="style.css" media-type="text/css"/>
+    <item id="title" href="title.xhtml" media-type="application/xhtml+xml"/>
+    ${manifest}
+  </manifest>
+  <spine><itemref idref="title"/>${spine}</spine>
+</package>`,
     },
     {
       name: "OEBPS/title.xhtml",
-      content: `<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml" lang="de"><head><title>${escapeHtml(title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head><body><h1>${escapeHtml(title)}</h1></body></html>`,
+      content: `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="de">
+  <head>
+    <title>${escapeHtml(title)}</title>
+    <link rel="stylesheet" type="text/css" href="style.css"/>
+  </head>
+  <body><h1>${escapeHtml(title)}</h1></body>
+</html>`,
     },
     {
       name: "OEBPS/nav.xhtml",
-      content: `<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="de"><head><title>Inhalt</title></head><body><nav epub:type="toc"><h1>Inhalt</h1><ol>${nav}</ol></nav></body></html>`,
+      content: `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="de">
+  <head><title>Inhalt</title></head>
+  <body>
+    <nav epub:type="toc"><h1>Inhalt</h1><ol>${nav}</ol></nav>
+  </body>
+</html>`,
     },
     {
       name: "OEBPS/style.css",
-      content:
-        "body{font-family:Georgia,serif;line-height:1.55;margin:5%}h1{font-size:1.5em;margin:0 0 1.5em}p{margin:0 0 1em;text-align:justify}",
+      content: `body { font-family: Georgia, serif; line-height: 1.6; margin: 5%; }
+h1 { font-size: 1.5em; margin: 0 0 1.5em; }
+h2, h3, h4, h5, h6 { page-break-after: avoid; }
+p { margin: 0 0 1em; text-align: justify; }
+ol, ul { margin: 0 0 1em; padding-left: 1.5em; }
+li { margin: 0.3em 0; }
+blockquote { margin: 1em 2em; font-style: italic; }
+code { font-family: Consolas, monospace; }
+.scene-break { margin: 1.6em 0; text-align: center; letter-spacing: 0.5em; }`,
     },
     ...chapterFiles,
   ]);
