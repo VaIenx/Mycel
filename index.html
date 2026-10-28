@@ -9,53 +9,83 @@
   </head>
   <body>
     <div id="app" class="app-shell">
-      <header class="topbar">
+      <aside class="app-sidebar">
         <button class="brand" data-page="wiki" aria-label="Enzyklopädie öffnen">
           <span class="brand-name">Mycel</span>
           <small>Klicken für Enzyklopädie</small>
         </button>
         <nav class="primary-nav" aria-label="Hauptnavigation">
-          <button data-page="home"><span>⌂</span> Übersicht</button>
-          <button data-page="chapters"><span>▤</span> Kapitel</button>
-          <button data-page="characters"><span>♧</span> Figuren</button>
-          <button data-page="places"><span>⌖</span> Orte</button>
-          <button data-page="knowledge"><span>◇</span> Wissen</button>
-          <button data-page="writing"><span>✎</span> Schreiben</button>
-          <button data-page="timeline"><span>◷</span> Zeitstrahl</button>
-          <button data-page="progress"><span>⌁</span> Fortschritt</button>
+          <div class="nav-group">
+            <span class="nav-group-label">Manuskript</span>
+            <button data-page="writing"><span>✎</span> Schreiben</button>
+            <button data-page="chapters"><span>▤</span> Kapitel</button>
+          </div>
+          <div class="nav-group">
+            <span class="nav-group-label">Welt</span>
+            <button data-page="characters"><span>♧</span> Figuren</button>
+            <button data-page="places"><span>⌖</span> Orte</button>
+            <button data-page="knowledge"><span>◇</span> Wissen</button>
+            <button data-page="timeline"><span>◷</span> Zeitstrahl</button>
+          </div>
+          <div class="nav-group">
+            <span class="nav-group-label">Überblick</span>
+            <button data-page="home"><span>⌂</span> Übersicht</button>
+            <button data-page="progress"><span>⌁</span> Fortschritt</button>
+            <button data-page="wiki">
+              <span class="stacked-books-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                  <path d="M5 3.5h14v4H5zM3 8h15v4H3zM5 12.5h14v4H5z" />
+                  <path d="M9 3.5v4M7 8v4m5 .5v4" />
+                </svg>
+              </span>
+              Wiki
+            </button>
+          </div>
         </nav>
-        <div class="top-actions">
+        <div class="sidebar-footer">
           <button
             id="settings-open"
-            class="icon-button settings-open"
+            class="sidebar-link settings-open"
             data-page="settings"
             title="Einstellungen"
             aria-label="Einstellungen"
           >
-            ⚙
-          </button>
-          <button
-            id="project-search-open"
-            class="icon-button search-open"
-            title="Im Projekt suchen"
-            aria-label="Im Projekt suchen"
-          >
-            ⌕
-          </button>
-          <button
-            id="open-project"
-            class="icon-button"
-            title="Projektordner öffnen"
-            aria-label="Projektordner öffnen"
-          >
-            ↗</button
-          ><button id="new-project" class="avatar-button" title="Neues Projekt">
-            ＋
+            <span aria-hidden="true">⚙</span> Einstellungen
           </button>
         </div>
-      </header>
+      </aside>
 
-      <main id="page" class="page"></main>
+      <div class="workspace">
+        <header class="topbar">
+          <div class="top-actions">
+            <button
+              id="project-search-open"
+              class="toolbar-action search-open"
+              title="Im Projekt suchen"
+              aria-label="Im Projekt suchen"
+            >
+              <span aria-hidden="true">⌕</span> Suchen
+            </button>
+            <button
+              id="open-project"
+              class="toolbar-action"
+              title="Projektordner öffnen"
+              aria-label="Projektordner öffnen"
+            >
+              ↗ <span>Projekt öffnen</span>
+            </button>
+            <button
+              id="new-project"
+              class="toolbar-action toolbar-action-primary"
+              title="Neues Projekt"
+            >
+              ＋ <span>Neues Projekt</span>
+            </button>
+          </div>
+        </header>
+
+        <main id="page" class="page"></main>
+      </div>
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
       <dialog id="dialog" class="dialog"></dialog>
       <dialog id="search-dialog" class="dialog project-search-dialog">

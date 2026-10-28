@@ -188,6 +188,12 @@ function toast(message) {
 
 function setPage(next) {
   if (state.page === "writing" && next !== "writing") void saveCurrentChapter();
+  if (next === "wiki" && !state.wikiEditing) {
+    state.wikiArticle = null;
+    state.wikiDraft = null;
+    state.wikiSearch = "";
+    state.wikiCategory = "all";
+  }
   state.page = next;
   document
     .querySelectorAll(".primary-nav [data-page]")
@@ -2062,31 +2068,77 @@ function renderWiki() {
     return html`<div class="wiki-layout">
       ${sidebar}
       <main class="wiki-welcome">
-        <span class="wiki-eyebrow">MYCEL · ENZYKLOPÄDIE</span>
-        <h1>Wissen, das zusammenwächst</h1>
-        <p>
-          Durchsuche Figuren, Orte und Wissen. Erkannte Namen und Aliase führen
-          direkt zu ihren Einträgen.
-        </p>
-        <div class="wiki-overview-grid">
+        <section class="wiki-home-hero">
+          <div>
+            <span class="wiki-eyebrow">WIKI · PROJEKTÜBERSICHT</span>
+            <h1>Die Welt deiner Geschichte</h1>
+            <p>
+              Figuren, Orte und Wissen sind hier miteinander verbunden. Suche
+              links nach einem Eintrag oder springe direkt zu einem Bereich.
+            </p>
+          </div>
+          <div class="wiki-home-total">
+            <strong>${articles.length}</strong>
+            <span>Einträge</span>
+          </div>
+          ${state.project
+            ? html`<div class="wiki-home-actions">
+                <button class="button" data-action="new-character">
+                  ＋ Figur
+                </button>
+                <button class="button" data-action="new-place">＋ Ort</button>
+                <button class="button" data-action="new-knowledge">
+                  ＋ Wissen
+                </button>
+              </div>`
+            : html`<button class="button primary" data-action="open-project">
+                Projekt öffnen
+              </button>`}
+        </section>
+        <div class="wiki-home-grid">
           ${groups
             .map(([kind, label]) => {
               const entries = articles.filter(
                 (article) => article.kind === kind,
               );
-              return html`<section class="wiki-overview-group">
-                <h2>${label}</h2>
-                <p>${entries.length} Einträge</p>
-                <div>
-                  ${entries
-                    .slice(0, 6)
-                    .map(
-                      (article) =>
-                        html`<button data-wiki-open="${esc(article.key)}">
-                          ${esc(article.title)}
-                        </button>`,
-                    )
-                    .join("")}
+              const createAction = {
+                character: "new-character",
+                place: "new-place",
+                knowledge: "new-knowledge",
+              }[kind];
+              const singular = {
+                character: "Figur",
+                place: "Ort",
+                knowledge: "Wissen",
+              }[kind];
+              return html`<section class="wiki-home-card">
+                <div class="wiki-home-card-heading">
+                  <h2>${label}</h2>
+                  <span>${entries.length}</span>
+                </div>
+                <div class="wiki-home-card-entries">
+                  ${entries.length
+                    ? entries
+                        .slice(0, 5)
+                        .map(
+                          (article) =>
+                            html`<button data-wiki-open="${esc(article.key)}">
+                              ${esc(article.title)}
+                              <span aria-hidden="true">›</span>
+                            </button>`,
+                        )
+                        .join("")
+                    : html`<p>Noch keine Einträge in diesem Bereich.</p>`}
+                </div>
+                <div class="wiki-home-card-actions">
+                  <button data-wiki-category="${kind}">
+                    Alle ${label.toLocaleLowerCase("de-DE")} ansehen
+                  </button>
+                  ${state.project
+                    ? html`<button data-action="${createAction}">
+                        ＋ ${singular} erstellen
+                      </button>`
+                    : ""}
                 </div>
               </section>`;
             })
