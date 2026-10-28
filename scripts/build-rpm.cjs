@@ -43,6 +43,8 @@ async function build() {
       `_topdir ${topDirectory}`,
       "--define",
       "_buildhost mycel-build",
+      "--define",
+      "_binary_payload w3.zstdio",
       specFile,
     ],
     { stdio: "inherit" },
