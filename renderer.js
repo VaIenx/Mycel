@@ -1,4 +1,12 @@
 const api = window.mycel;
+function loadCollapsedPlotThreads() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem("mycel-collapsed-plot") || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
 const state = {
   project: null,
   recentProjects: [],
@@ -18,6 +26,13 @@ const state = {
     160,
     Math.max(50, Number(localStorage.getItem("mycel-timeline-zoom")) || 100),
   ),
+  timelineView: ["timeline", "plot"].includes(
+    localStorage.getItem("mycel-timeline-view"),
+  )
+    ? localStorage.getItem("mycel-timeline-view")
+    : "timeline",
+  collapsedPlotThreads: loadCollapsedPlotThreads(),
+  editorMarksVisible: localStorage.getItem("mycel-editor-marks-visible") !== "false",
   writingMode: ["normal", "blinders", "typewriter"].includes(
     localStorage.getItem("mycel-writing-mode"),
   )
@@ -188,12 +203,6 @@ function toast(message) {
 
 function setPage(next) {
   if (state.page === "writing" && next !== "writing") void saveCurrentChapter();
-  if (next === "wiki" && !state.wikiEditing) {
-    state.wikiArticle = null;
-    state.wikiDraft = null;
-    state.wikiSearch = "";
-    state.wikiCategory = "all";
-  }
   state.page = next;
   document
     .querySelectorAll(".primary-nav [data-page]")
@@ -2265,6 +2274,104 @@ function keepTypewriterLineInView(editor) {
   );
 }
 
+function editEditorMark(type, existing = null) {
+  const editor = page.querySelector("#editor-text");
+  const chapter = existing
+    ? state.project.chapters.find((item) => item.id === existing.chapterId)
+    : currentChapter();
+  if ((!editor && !existing) || !chapter) return;
+  const source = editor?.value || chapter.body || "";
+  const existingRange = existing ? resolveMarkRange(source, existing) : null;
+  const start = existingRange?.start ?? existing?.start ?? editor.selectionStart;
+  const end = existingRange?.end ?? existing?.end ?? editor.selectionEnd;
+  const quote = existing?.quote || source.slice(start, end);
+  if (!existing && !quote.trim()) {
+    toast("Markiere zuerst eine Textstelle im Kapitel.");
+    return;
+  }
+  openDialog(
+    existing
+      ? existing.type === "question"
+        ? "Offene Frage bearbeiten"
+        : "Änderungsnotiz bearbeiten"
+      : type === "question"
+        ? "Offene Frage markieren"
+        : "Änderungsnotiz hinzufügen",
+    html`<div class="form-grid">
+      <label class="field full editor-mark-quote"
+        >Markierte Textstelle<textarea readonly rows="3">${esc(quote)}</textarea>
+      </label>
+      <label class="field full"
+        >${type === "question" ? "Offene Frage" : "Was soll später geändert werden?"}<textarea name="note" rows="4" required autofocus>${esc(existing?.note || "")}</textarea>
+      </label>
+    </div>`,
+    async (data) => {
+      const note = String(data.get("note") || "").trim();
+      if (!note) return false;
+      const current = currentChapter();
+      if (!chapter) return false;
+      const mark = {
+        ...(existing || {}),
+        id: existing?.id || crypto.randomUUID(),
+        type: existing?.type || type,
+        chapterId: chapter.id,
+        start,
+        end,
+        quote,
+        note,
+        contextBefore:
+          existing?.contextBefore || source.slice(Math.max(0, start - 80), start),
+        contextAfter:
+          existing?.contextAfter || source.slice(end, end + 80),
+        createdAt: existing?.createdAt || new Date().toISOString(),
+        resolved: existing?.resolved || false,
+      };
+      if (editor && current?.id === chapter.id)
+        await saveCurrentChapter();
+      const marks = [...(state.project.editorMarks || [])];
+      const index = marks.findIndex((item) => item.id === mark.id);
+      if (index >= 0) marks[index] = mark;
+      else marks.push(mark);
+      state.project = await api.saveEditorMarks(marks);
+      const scrollTop = editor?.scrollTop || 0;
+      render();
+      const nextEditor = page.querySelector("#editor-text");
+      if (nextEditor && editor) {
+        nextEditor.scrollTop = scrollTop;
+        nextEditor.focus();
+      }
+      toast(existing ? "Markierung aktualisiert." : "Markierung gespeichert.");
+      return true;
+    },
+  );
+}
+
+function jumpToEditorMark(mark) {
+  const chapter = state.project.chapters.find(
+    (item) => item.id === mark.chapterId,
+  );
+  if (!chapter) return;
+  state.activeChapter = chapter.id;
+  setPage("writing");
+  requestAnimationFrame(() => {
+    const editor = page.querySelector("#editor-text");
+    if (!editor) return;
+    const range = resolveMarkRange(editor.value, mark);
+    if (!range) {
+      editor.focus();
+      return;
+    }
+    editor.focus();
+    editor.setSelectionRange(range.start, range.end);
+    const lineHeight = Number.parseFloat(getComputedStyle(editor).lineHeight) || 28;
+    const lineNumber = editor.value.slice(0, range.start).split("\n").length - 1;
+    editor.scrollTop = Math.max(
+      0,
+      lineNumber * lineHeight - editor.clientHeight / 2,
+    );
+  });
+}
+
 function renderWriting() {
   const chapters = state.project.chapters;
   if (!state.activeChapter && chapters.length)
@@ -2281,6 +2388,9 @@ function renderWriting() {
           </button>
         </div>
       </div>`;
+  const chapterMarks = (state.project.editorMarks || []).filter(
+    (mark) => mark.chapterId === chapter.id,
+  );
   const ordered = [...chapters].sort(
     (a, b) => (a.order ?? 9999) - (b.order ?? 9999),
   );
@@ -2333,6 +2443,19 @@ function renderWriting() {
         ><button data-format="scene">— ✦ —</button
         ><i class="editor-tools-sep"></i
         ><button data-action="save-now">✓ Gespeichert</button>
+        <i class="editor-tools-sep"></i>
+        <button class="editor-mark-action" data-action="add-editor-mark" data-mark-type="question">
+          ? Offene Frage
+        </button>
+        <button class="editor-mark-action" data-action="add-editor-mark" data-mark-type="note">
+          ✎ Änderungsnotiz
+        </button>
+        <button class="editor-mark-toggle" data-action="toggle-editor-marks">
+          ${state.editorMarksVisible ? "Markierungen ausblenden" : "Markierungen einblenden"}
+        </button>
+        <button class="editor-question-count" data-page="questions">
+          Alle Markierungen · ${(state.project.editorMarks || []).length}
+        </button>
         <label class="writing-mode-control" for="writing-mode">
           Schreibmodus
           <select id="writing-mode" class="select-like">
@@ -2357,19 +2480,45 @@ function renderWriting() {
           </select>
         </label>
       </div>
-      <div class="editor-wrap" data-writing-mode="${state.writingMode}">
-        <div
-          id="editor-highlight"
-          class="editor-highlight"
-          aria-hidden="true"
-          data-placeholder="Schreib den ersten Satz deiner Geschichte …"
-        ></div>
-        <textarea
-          id="editor-text"
-          class="editor-text"
-          spellcheck="${state.writingMode === "typewriter" ? "false" : "true"}"
-          placeholder="Schreib den ersten Satz deiner Geschichte …"
-        ></textarea>
+      <div class="editor-workspace">
+        <div class="editor-wrap" data-writing-mode="${state.writingMode}">
+          <div
+            id="editor-highlight"
+            class="editor-highlight"
+            aria-hidden="true"
+            data-placeholder="Schreib den ersten Satz deiner Geschichte …"
+          ></div>
+          <textarea
+            id="editor-text"
+            class="editor-text"
+            spellcheck="${state.writingMode === "typewriter" ? "false" : "true"}"
+            placeholder="Schreib den ersten Satz deiner Geschichte …"
+          ></textarea>
+        </div>
+        ${state.editorMarksVisible
+          ? html`<aside class="editor-mark-list">
+              <div class="editor-mark-list-heading">
+                <strong>Markierungen</strong>
+                <span>${chapterMarks.length}</span>
+              </div>
+              ${chapterMarks.length
+                ? chapterMarks
+                    .map(
+                      (mark) => html`<article class="editor-mark-card ${mark.type}">
+                        <span class="editor-mark-label">${mark.type === "question" ? "Offene Frage" : "Änderungsnotiz"}</span>
+                        <blockquote>${esc(mark.quote)}</blockquote>
+                        <p>${esc(mark.note)}</p>
+                        <div class="editor-mark-card-actions">
+                          <button data-action="jump-editor-mark" data-id="${esc(mark.id)}">Zur Stelle</button>
+                          <button data-action="edit-editor-mark" data-id="${esc(mark.id)}">Bearbeiten</button>
+                          <button data-action="remove-editor-mark" data-id="${esc(mark.id)}">Löschen</button>
+                        </div>
+                      </article>`,
+                    )
+                    .join("")
+                : '<p class="editor-mark-empty">Wähle eine Textstelle aus und füge eine Frage oder Notiz hinzu.</p>'}
+            </aside>`
+          : ""}
       </div>
       <div class="editor-status">
         <span id="save-indicator">Alle Änderungen gespeichert</span
@@ -2480,6 +2629,228 @@ function renderProgress() {
     </div>`;
 }
 
+function renderQuestions() {
+  const marks = [...(state.project.editorMarks || [])].sort((left, right) => {
+      const leftChapter = state.project.chapters.findIndex(
+        (chapter) => chapter.id === left.chapterId,
+      );
+      const rightChapter = state.project.chapters.findIndex(
+        (chapter) => chapter.id === right.chapterId,
+      );
+      return leftChapter - rightChapter || left.start - right.start;
+    });
+  const renderMark = (mark) => {
+    const chapter = state.project.chapters.find(
+      (item) => item.id === mark.chapterId,
+    );
+    return html`<article class="question-card ${mark.type} ${mark.resolved ? "resolved" : ""}">
+      <div class="question-card-body">
+        <span class="editor-mark-label">${mark.type === "question" ? "Offene Frage" : "Änderungsnotiz"}</span>
+        <button class="question-location" data-action="jump-editor-mark" data-id="${esc(mark.id)}">
+          ${esc(chapter?.title || "Kapitel fehlt")} · Textstelle öffnen
+        </button>
+        <blockquote>${esc(mark.quote)}</blockquote>
+        <p>${esc(mark.note)}</p>
+      </div>
+      <div class="question-card-actions">
+        <button class="button small" data-action="edit-editor-mark" data-id="${esc(mark.id)}">Bearbeiten</button>
+        ${mark.type === "question"
+          ? html`<button class="button small" data-action="resolve-editor-question" data-id="${esc(mark.id)}">
+              ${mark.resolved ? "Wieder öffnen" : "Erledigt"}
+            </button>`
+          : ""}
+        <button class="button small subtle" data-action="remove-editor-mark" data-id="${esc(mark.id)}">Entfernen</button>
+      </div>
+    </article>`;
+  };
+  const questions = marks.filter((mark) => mark.type === "question");
+  const open = questions.filter((mark) => !mark.resolved);
+  const resolved = questions.filter((mark) => mark.resolved);
+  const notes = marks.filter((mark) => mark.type === "note");
+  return html`${heading("Markierungen")}
+    <div class="question-summary">
+      <strong>${open.length}</strong>
+      <span>offene Fragen · ${notes.length} Änderungsnotizen · ${marks.length} Markierungen insgesamt</span>
+    </div>
+    ${!marks.length
+      ? '<div class="empty-state"><strong>Noch keine Markierungen</strong><span>Markiere im Editor eine Textstelle, um eine Frage oder Änderungsnotiz festzuhalten.</span></div>'
+      : ""}
+    <section class="question-section">
+      <h2>Offene Fragen</h2>
+      ${open.length
+        ? open.map(renderMark).join("")
+        : '<p class="small-note">Keine offenen Fragen.</p>'}
+    </section>
+    ${notes.length
+      ? html`<section class="question-section">
+          <h2>Änderungsnotizen</h2>
+          ${notes.map(renderMark).join("")}
+        </section>`
+      : ""}
+    ${resolved.length
+      ? html`<details class="question-resolved">
+          <summary>Erledigt · ${resolved.length}</summary>
+          ${resolved.map(renderMark).join("")}
+        </details>`
+      : ""}`;
+}
+
+function renderPlotThreadNode(thread, threads, chapters, ancestors = new Set()) {
+  if (ancestors.has(thread.id)) return "";
+  const nextAncestors = new Set(ancestors).add(thread.id);
+  const children = threads
+    .filter((item) => item.parentId === thread.id)
+    .sort((left, right) => left.order - right.order);
+  const chapter = chapters.find((item) => item.id === thread.chapterId);
+  const collapsed = state.collapsedPlotThreads.has(thread.id);
+  return html`<div class="plot-thread-node ${children.length ? "has-children" : ""}">
+    <article class="plot-thread-card">
+      <div class="plot-thread-card-toolbar">
+        <span>Handlungsfaden</span>
+        <div class="timeline-event-options">
+          <button
+            class="timeline-options-button"
+            data-action="plot-options"
+            aria-label="Optionen für ${esc(thread.title)}"
+            aria-haspopup="true"
+            aria-expanded="false"
+          >
+            ⚙
+          </button>
+          <div class="timeline-event-menu" data-plot-thread-menu hidden>
+            <button data-action="plot-thread-add-child" data-id="${esc(thread.id)}">Ast hinzufügen</button>
+            ${children.length
+              ? html`<button data-action="plot-thread-collapse" data-id="${esc(thread.id)}">
+                  ${collapsed ? "Äste öffnen" : "Äste schließen"}
+                </button>`
+              : ""}
+            <button data-action="plot-thread-edit" data-id="${esc(thread.id)}">Bearbeiten</button>
+            <button class="danger" data-action="plot-thread-delete" data-id="${esc(thread.id)}">Knoten entfernen</button>
+          </div>
+        </div>
+      </div>
+      <h2>${esc(thread.title)}</h2>
+      ${chapter
+        ? html`<button class="timeline-chapter" data-action="write-chapter" data-id="${esc(chapter.id)}">
+            ${esc(chapter.title || chapter.id)}
+          </button>`
+        : '<span class="plot-thread-chapter">Kein Kapitel zugeordnet</span>'}
+      ${thread.note ? html`<p>${esc(thread.note)}</p>` : '<p class="plot-thread-empty-note">Noch keine Notiz.</p>'}
+      ${children.length
+        ? html`<div class="plot-thread-branch-count">
+            ${collapsed ? "Äste eingeklappt" : `${children.length} ${children.length === 1 ? "Ast" : "Äste"}`}
+          </div>`
+        : ""}
+    </article>
+    ${children.length && !collapsed
+      ? html`<div class="plot-thread-children">
+          ${children
+            .map((child) =>
+              renderPlotThreadNode(child, threads, chapters, nextAncestors),
+            )
+            .join("")}
+        </div>`
+      : ""}
+  </div>`;
+}
+
+function renderPlotThreadView() {
+  const threads = [...(state.project.plotThreads || [])].sort(
+    (left, right) => left.order - right.order,
+  );
+  const ids = new Set(threads.map((thread) => thread.id));
+  let roots = threads.filter(
+    (thread) => !thread.parentId || !ids.has(thread.parentId),
+  );
+  if (!roots.length && threads.length) roots = threads.slice(0, 1);
+  return html`<div class="timeline-scroll plot-thread-scroll">
+    ${roots.length
+      ? html`<div
+          class="plot-tree-canvas"
+          style="--plot-node-width:${Math.round(260 * (state.timelineZoom / 100))}px"
+        >
+          ${roots
+            .map((thread) =>
+              renderPlotThreadNode(
+                thread,
+                threads,
+                state.project.chapters,
+              ),
+            )
+            .join("")}
+        </div>`
+      : '<div class="timeline-empty"><strong>Noch keine Handlungsfäden</strong><span>Lege einen Hauptstrang an und ergänze über die Knoten verzweigte Äste.</span></div>'}
+  </div>`;
+}
+
+function plotThreadDescendants(id, threads, result = new Set()) {
+  threads
+    .filter((thread) => thread.parentId === id)
+    .forEach((thread) => {
+      if (result.has(thread.id)) return;
+      result.add(thread.id);
+      plotThreadDescendants(thread.id, threads, result);
+    });
+  return result;
+}
+
+function editPlotThread(existing = null, parentId = "") {
+  const threads = state.project.plotThreads || [];
+  const excluded = existing
+    ? plotThreadDescendants(existing.id, threads, new Set([existing.id]))
+    : new Set();
+  const chapters = [...state.project.chapters].sort(
+    (left, right) => (left.order ?? 9999) - (right.order ?? 9999),
+  );
+  openDialog(
+    existing ? "Handlungsfaden bearbeiten" : "Handlungsfaden anlegen",
+    html`<div class="form-grid">
+      <label class="field full">Name<input name="title" required autofocus value="${esc(existing?.title || "")}" placeholder="Zum Beispiel: Die Suche nach dem Erbstück" /></label>
+      <label class="field full">Notiz<textarea name="note" rows="5" placeholder="Was geschieht in diesem Handlungsfaden?">${esc(existing?.note || "")}</textarea></label>
+      <label class="field">Kapitel<select name="chapterId">
+        <option value="">Kein Kapitel zugeordnet</option>
+        ${chapters
+          .map(
+            (chapter) =>
+              html`<option value="${esc(chapter.id)}" ${chapter.id === existing?.chapterId ? "selected" : ""}>${esc(chapter.title || chapter.id)}</option>`,
+          )
+          .join("")}
+      </select></label>
+      <label class="field">Vorgänger / übergeordneter Knoten<select name="parentId">
+        <option value="">Hauptstrang</option>
+        ${threads
+          .filter((thread) => !excluded.has(thread.id))
+          .map(
+            (thread) =>
+              html`<option value="${esc(thread.id)}" ${thread.id === (existing?.parentId || parentId) ? "selected" : ""}>${esc(thread.title)}</option>`,
+          )
+          .join("")}
+      </select></label>
+    </div>`,
+    async (data) => {
+      const title = String(data.get("title") || "").trim();
+      if (!title) return false;
+      const thread = {
+        ...(existing || {}),
+        id: existing?.id || crypto.randomUUID(),
+        title,
+        note: String(data.get("note") || "").trim(),
+        chapterId: String(data.get("chapterId") || ""),
+        parentId: String(data.get("parentId") || ""),
+        order: existing?.order ?? threads.length,
+      };
+      const updated = [...threads];
+      const index = updated.findIndex((item) => item.id === thread.id);
+      if (index >= 0) updated[index] = thread;
+      else updated.push(thread);
+      state.project = await api.savePlotThreads(updated);
+      render();
+      toast(existing ? "Handlungsfaden aktualisiert." : "Handlungsfaden angelegt.");
+      return true;
+    },
+  );
+}
+
 function renderTimeline() {
   const chapters = [...state.project.chapters].sort(
     (left, right) => (left.order ?? 9999) - (right.order ?? 9999),
@@ -2563,19 +2934,25 @@ function renderTimeline() {
       </article>`;
     })
     .join("");
-  return html`${heading(
-      "Zeitstrahl",
-      html`<button class="button primary" data-action="timeline-add">
-        ＋ Ereignis hinzufügen
-      </button>`,
-    )}
-    <div class="timeline-zoom-controls" aria-label="Zeitstrahl-Zoom">
+  const viewToggle = html`<div class="timeline-view-toggle" role="tablist" aria-label="Ansicht wählen">
+    <button type="button" role="tab" data-timeline-view="timeline" class="${state.timelineView === "timeline" ? "active" : ""}">Zeitstrahl</button>
+    <button type="button" role="tab" data-timeline-view="plot" class="${state.timelineView === "plot" ? "active" : ""}">Handlungsfäden</button>
+  </div>`;
+  const actions =
+    state.timelineView === "timeline"
+      ? html`<button class="button primary" data-action="timeline-add">
+          ＋ Ereignis hinzufügen
+        </button>`
+      : html`<button class="button primary" data-action="plot-thread-add">
+          ＋ Hauptstrang hinzufügen
+        </button>`;
+  const zoomControls = html`<div class="timeline-zoom-controls" aria-label="Ansichtszoom">
       <span>Zoom</span>
       <button
         class="timeline-zoom-button"
         data-action="timeline-zoom"
         data-direction="out"
-        aria-label="Zeitstrahl verkleinern"
+        aria-label="Ansicht verkleinern"
         ${state.timelineZoom <= 50 ? "disabled" : ""}
       >
         −
@@ -2585,13 +2962,18 @@ function renderTimeline() {
         class="timeline-zoom-button"
         data-action="timeline-zoom"
         data-direction="in"
-        aria-label="Zeitstrahl vergrößern"
+        aria-label="Ansicht vergrößern"
         ${state.timelineZoom >= 160 ? "disabled" : ""}
       >
         +
       </button>
       <span class="small-note">Strg + / Strg − · seitlich scrollen</span>
-    </div>
+    </div>`;
+  if (state.timelineView === "plot")
+    return html`${heading("Handlungsfäden", actions)}${viewToggle}${zoomControls}${renderPlotThreadView()}`;
+  return html`${heading("Zeitstrahl", actions)}
+    ${viewToggle}
+    ${zoomControls}
     <div class="timeline-scroll">
       ${events.length
         ? html`<div
@@ -2614,6 +2996,12 @@ function setTimelineZoom(value) {
     "--timeline-column-width",
     `${Math.round(280 * (state.timelineZoom / 100))}px`,
   );
+  document
+    .querySelector(".plot-tree-canvas")
+    ?.style.setProperty(
+      "--plot-node-width",
+      `${Math.round(260 * (state.timelineZoom / 100))}px`,
+    );
   const label = document.querySelector("[data-timeline-zoom-label]");
   if (label) label.value = `${state.timelineZoom}%`;
   document
@@ -2741,34 +3129,110 @@ function characterMatchData(characters, places, knowledge = []) {
   return [...matches.values()].sort((a, b) => b.name.length - a.name.length);
 }
 
-function highlightedText(text, characters, places, knowledge = []) {
+function resolveMarkRange(text, mark) {
+  const quote = String(mark.quote || "");
+  if (!quote) return null;
+  const start = Number(mark.start) || 0;
+  if (text.slice(start, start + quote.length) === quote)
+    return { start, end: start + quote.length };
+  let best = null;
+  let searchFrom = 0;
+  while (searchFrom < text.length) {
+    const index = text.indexOf(quote, searchFrom);
+    if (index < 0) break;
+    const before = text.slice(
+      Math.max(0, index - String(mark.contextBefore || "").length),
+      index,
+    );
+    const after = text.slice(
+      index + quote.length,
+      index + quote.length + String(mark.contextAfter || "").length,
+    );
+    const contextScore =
+      (mark.contextBefore && before === mark.contextBefore ? 2 : 0) +
+      (mark.contextAfter && after === mark.contextAfter ? 2 : 0);
+    const distanceScore = -Math.abs(index - start) / Math.max(1, text.length);
+    const score = contextScore + distanceScore;
+    if (!best || score > best.score) best = { start: index, score };
+    searchFrom = index + quote.length;
+  }
+  return best ? { start: best.start, end: best.start + quote.length } : null;
+}
+
+function highlightedText(
+  text,
+  characters,
+  places,
+  knowledge = [],
+  annotations = [],
+  showAnnotations = true,
+) {
   const matches = characterMatchData(characters, places, knowledge);
-  if (!matches.length) return esc(text);
-  const expression = new RegExp(
-    `(?<![\\p{L}\\p{N}_])(?:${matches
-      .map(({ name }) => escapeRegex(name))
-      .join("|")})(?![\\p{L}\\p{N}_])`,
-    "giu",
-  );
   const byName = new Map(
     matches.map(({ name, entity }) => [
       name.toLocaleLowerCase("de-DE"),
       entity,
     ]),
   );
-  let output = "";
-  let previous = 0;
-  for (const match of text.matchAll(expression)) {
-    output += esc(text.slice(previous, match.index));
-    const entity = byName.get(match[0].toLocaleLowerCase("de-DE"));
-    output += `<span class="character-mention" data-action="open-${entity.kind}" data-id="${esc(
-      entity.id,
-    )}" style="--character-highlight: ${characterColor(entity)}">${esc(
-      match[0],
-    )}</span>`;
-    previous = match.index + match[0].length;
+  const entityRanges = [];
+  if (matches.length) {
+    const expression = new RegExp(
+      `(?<![\\p{L}\\p{N}_])(?:${matches
+        .map(({ name }) => escapeRegex(name))
+        .join("|")})(?![\\p{L}\\p{N}_])`,
+      "giu",
+    );
+    for (const match of text.matchAll(expression)) {
+      const entity = byName.get(match[0].toLocaleLowerCase("de-DE"));
+      if (entity)
+        entityRanges.push({
+          start: match.index,
+          end: match.index + match[0].length,
+          entity,
+        });
+    }
   }
-  return output + esc(text.slice(previous));
+  const annotationRanges = showAnnotations
+    ? annotations
+        .map((mark) => ({ ...resolveMarkRange(text, mark), mark }))
+        .filter((range) => Number.isInteger(range.start) && range.end > range.start)
+    : [];
+  const boundaries = new Set([0, text.length]);
+  [...entityRanges, ...annotationRanges].forEach((range) => {
+    boundaries.add(range.start);
+    boundaries.add(range.end);
+  });
+  const positions = [...boundaries].sort((left, right) => left - right);
+  let output = "";
+  for (let index = 0; index < positions.length - 1; index++) {
+    const start = positions[index];
+    const end = positions[index + 1];
+    if (end <= start) continue;
+    const entity = entityRanges.find(
+      (range) => range.start <= start && range.end >= end,
+    )?.entity;
+    const activeMarks = annotationRanges
+      .filter((range) => range.start <= start && range.end >= end)
+      .map((range) => range.mark);
+    let content = esc(text.slice(start, end));
+    if (entity)
+      content = `<span class="character-mention" data-action="open-${entity.kind}" data-id="${esc(
+        entity.id,
+      )}" style="--character-highlight: ${characterColor(entity)}">${content}</span>`;
+    if (activeMarks.length) {
+      const classes = [
+        ...new Set(activeMarks.map((mark) => `is-${mark.type}`)),
+      ].join(" ");
+      const titles = activeMarks
+        .map((mark) => `${mark.type === "question" ? "Offene Frage" : "Änderungsnotiz"}: ${mark.note}`)
+        .join(" · ");
+      content = `<span class="editor-annotation-mark ${classes}" title="${esc(
+        titles,
+      )}">${content}</span>`;
+    }
+    output += content;
+  }
+  return output;
 }
 
 function showEntityTooltip(entity, event) {
@@ -2857,6 +3321,7 @@ function render() {
   else if (state.page === "writing") page.innerHTML = renderWriting();
   else if (state.page === "timeline") page.innerHTML = renderTimeline();
   else if (state.page === "progress") page.innerHTML = renderProgress();
+  else if (state.page === "questions") page.innerHTML = renderQuestions();
   if (state.page === "chapters") applyChapterFilters();
   if (state.page === "wiki") applyWikiFilters();
   if (state.page === "settings") {
@@ -3060,6 +3525,9 @@ function render() {
   if (editor) {
     editor.value = currentChapter()?.body || "";
     state.lastSavedWords = wordCount(editor.value);
+    const editorMarks = (state.project.editorMarks || []).filter(
+      (mark) => mark.chapterId === state.activeChapter,
+    );
     const highlight = page.querySelector("#editor-highlight");
     const updateHighlights = () => {
       highlight.innerHTML = highlightedText(
@@ -3067,6 +3535,8 @@ function render() {
         state.project.characters,
         state.project.places,
         state.project.knowledge,
+        editorMarks,
+        state.editorMarksVisible,
       );
       highlight.scrollTop = editor.scrollTop;
       highlight.scrollLeft = editor.scrollLeft;
@@ -3213,6 +3683,8 @@ function render() {
       state.project.characters,
       state.project.places,
       state.project.knowledge,
+      editorMarks,
+      state.editorMarksVisible,
     );
     const currentWords = wordCount(ch.body);
     page.querySelector("#word-count-live").textContent = format(currentWords);
@@ -4091,12 +4563,21 @@ async function removeRecentProject(root) {
 }
 
 document.addEventListener("click", async (event) => {
-  if (!event.target.closest('[data-action="timeline-options"]')) {
+  if (
+    !event.target.closest('[data-action="timeline-options"]') &&
+    !event.target.closest('[data-action="plot-options"]')
+  ) {
     document.querySelectorAll("[data-timeline-event-menu]").forEach((menu) => {
       menu.hidden = true;
     });
     document
       .querySelectorAll('[data-action="timeline-options"]')
+      .forEach((button) => button.setAttribute("aria-expanded", "false"));
+    document.querySelectorAll("[data-plot-thread-menu]").forEach((menu) => {
+      menu.hidden = true;
+    });
+    document
+      .querySelectorAll('[data-action="plot-options"]')
       .forEach((button) => button.setAttribute("aria-expanded", "false"));
   }
   const pageNavigation = event.target.closest("[data-page]");
@@ -4422,7 +4903,20 @@ document.addEventListener("click", async (event) => {
   }
   const pageButton = event.target.closest("[data-page]");
   if (pageButton) {
+    if (pageButton.dataset.page === "wiki" && !state.wikiEditing) {
+      state.wikiArticle = null;
+      state.wikiDraft = null;
+      state.wikiSearch = "";
+      state.wikiCategory = "all";
+    }
     setPage(pageButton.dataset.page);
+    return;
+  }
+  const timelineView = event.target.closest("[data-timeline-view]");
+  if (timelineView) {
+    state.timelineView = timelineView.dataset.timelineView;
+    localStorage.setItem("mycel-timeline-view", state.timelineView);
+    render();
     return;
   }
   const formatButton = event.target.closest("[data-format]");
@@ -4433,6 +4927,120 @@ document.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]");
   if (!button) return;
   const action = button.dataset.action;
+  if (action === "plot-options") {
+    const menu = button.parentElement.querySelector("[data-plot-thread-menu]");
+    const open = menu.hidden;
+    document.querySelectorAll("[data-plot-thread-menu]").forEach((item) => {
+      item.hidden = true;
+    });
+    document
+      .querySelectorAll('[data-action="plot-options"]')
+      .forEach((item) => item.setAttribute("aria-expanded", "false"));
+    if (open) {
+      menu.hidden = false;
+      button.setAttribute("aria-expanded", "true");
+    }
+    return;
+  }
+  if (action === "plot-thread-add") {
+    editPlotThread();
+    return;
+  }
+  if (action === "plot-thread-add-child") {
+    editPlotThread(null, button.dataset.id);
+    return;
+  }
+  if (action === "plot-thread-collapse") {
+    if (state.collapsedPlotThreads.has(button.dataset.id))
+      state.collapsedPlotThreads.delete(button.dataset.id);
+    else state.collapsedPlotThreads.add(button.dataset.id);
+    localStorage.setItem(
+      "mycel-collapsed-plot",
+      JSON.stringify([...state.collapsedPlotThreads]),
+    );
+    render();
+    return;
+  }
+  if (action === "plot-thread-edit") {
+    const thread = state.project.plotThreads?.find(
+      (item) => item.id === button.dataset.id,
+    );
+    if (thread) editPlotThread(thread);
+    return;
+  }
+  if (action === "plot-thread-delete") {
+    const threads = state.project.plotThreads || [];
+    const thread = threads.find((item) => item.id === button.dataset.id);
+    if (
+      thread &&
+      confirm(`„${thread.title}“ entfernen? Darunterliegende Äste bleiben erhalten.`)
+    ) {
+      const updated = threads
+        .filter((item) => item.id !== thread.id)
+        .map((item) =>
+          item.parentId === thread.id
+            ? { ...item, parentId: thread.parentId || "" }
+            : item,
+        );
+      state.project = await api.savePlotThreads(updated);
+      render();
+      toast("Handlungsknoten entfernt.");
+    }
+    return;
+  }
+  if (action === "add-editor-mark") {
+    editEditorMark(button.dataset.markType);
+    return;
+  }
+  if (action === "toggle-editor-marks") {
+    state.editorMarksVisible = !state.editorMarksVisible;
+    localStorage.setItem(
+      "mycel-editor-marks-visible",
+      String(state.editorMarksVisible),
+    );
+    render();
+    return;
+  }
+  if (action === "jump-editor-mark") {
+    const mark = state.project.editorMarks?.find(
+      (item) => item.id === button.dataset.id,
+    );
+    if (mark) jumpToEditorMark(mark);
+    return;
+  }
+  if (action === "edit-editor-mark") {
+    const mark = state.project.editorMarks?.find(
+      (item) => item.id === button.dataset.id,
+    );
+    if (mark) editEditorMark(mark.type, mark);
+    return;
+  }
+  if (action === "remove-editor-mark") {
+    const marks = state.project.editorMarks || [];
+    const mark = marks.find((item) => item.id === button.dataset.id);
+    if (
+      mark &&
+      confirm(
+        `${mark.type === "question" ? "Offene Frage" : "Änderungsnotiz"} entfernen?`,
+      )
+    ) {
+      state.project = await api.saveEditorMarks(
+        marks.filter((item) => item.id !== mark.id),
+      );
+      render();
+    }
+    return;
+  }
+  if (action === "resolve-editor-question") {
+    const marks = (state.project.editorMarks || []).map((mark) =>
+      mark.id === button.dataset.id
+        ? { ...mark, resolved: !mark.resolved }
+        : mark,
+    );
+    state.project = await api.saveEditorMarks(marks);
+    render();
+    return;
+  }
   if (action === "edit-chapter") {
     event.stopPropagation();
     const ch = state.project.chapters.find(
