@@ -1,61 +1,127 @@
-# Mycel
+<!-- BILD 1 (Banner/Logo): Dein vorhandenes mycel-icon.svg oder mycel.png.
+     Optional: ein breites Banner (ca. 1280x320) unter docs/images/banner.png -->
+<p align="center">
+  <img src="mycel-icon.svg" alt="Mycel logo" width="120">
+</p>
 
-Mycel is a calm, local-first desktop writing app by **Valenx** (GitHub: [@VaIenx](https://github.com/VaIenx)). It helps novelists write chapters, develop characters and places, collect world knowledge, and follow their writing progress. Manuscripts stay in ordinary Markdown files on your computer.
+<h1 align="center">Mycel</h1>
+
+<p align="center">
+  <strong>A calm, local-first writing suite for novelists.</strong><br>
+  Write chapters, build your world, and watch your story grow — in plain Markdown files that stay yours.
+</p>
+
+<p align="center">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green">
+  <img alt="Electron" src="https://img.shields.io/badge/built%20with-Electron-47848f">
+  <img alt="Node.js 22.12+" src="https://img.shields.io/badge/node-%3E%3D22.12-339933">
+  <img alt="Local first" src="https://img.shields.io/badge/local--first-no%20account-8a6f4d">
+</p>
+
+<!-- BILD 2 (Hero-Screenshot): Hauptansicht mit geöffnetem Kapitel, links die Seitenleiste
+     (Kapitel/Charaktere/Orte/Wissen), rechts der Text. Das ist das wichtigste Bild.
+     Datei: docs/images/hero.png (ca. 1600x1000, am besten mit dem Testprojekt aufgenommen) -->
+<p align="center">
+  <img src="docs/images/maineditor.png" alt="Mycel main editor view" width="900">
+</p>
+
+---
+
+## Why Mycel?
+
+Most writing tools either bury your manuscript in a proprietary format or leave your worldbuilding scattered across a dozen documents. Mycel keeps everything in one place and stays out of your way:
+
+- **Your files, your folder.** Every chapter, character, place, and knowledge entry is an ordinary Markdown file you can open anywhere.
+- **No account, no cloud.** Nothing is uploaded. Sync and backup are up to you.
+- **Built for long fiction.** Volumes, statuses, aliases, hierarchies, and links between everything — made for books with a big cast and a big world.
 
 ## Features
 
-- Write and organize chapters by volume, status, and order.
-- Build character profiles with roles, aliases, descriptions, portraits, and relationships.
-- Organize places by category and hierarchy, with images and descriptions.
-- Create flexible knowledge entries for races, religions, magic, objects, and more.
-- Link characters, places, and knowledge automatically when their names or aliases appear in the manuscript.
-- Connect knowledge entries to characters, places, and other entries.
-- Track manuscript word counts, daily writing, and progress toward a word goal.
-- Search the whole project and replace text throughout the manuscript.
-- Open and continue a project from its local folder.
+### Chapters
+Write and organize chapters by volume, status, and order.
 
-## Start
+### Characters
+Profiles with roles, aliases, descriptions, portraits, and relationships.
 
-Install [Node.js](https://nodejs.org/) 22.12 or newer, then run from the project folder:
+<!-- BILD 3 (Charakter-Ansicht): Ein ausgefülltes Charakterprofil mit Porträt, Aliasen und Beziehungen.
+     Datei: docs/images/characters.png -->
+<p align="center">
+  <img src="docs/images/characters.png" alt="Character profile with portrait and relationships" width="800">
+</p>
 
-```sh
+### Places
+Organize places by category and hierarchy (world → region → city → building), with images and descriptions.
+
+<!-- BILD 4 (Orte-Ansicht): Orte-Hierarchie als Baum plus ein Ort mit Bild.
+     Datei: docs/images/places.png -->
+<p align="center">
+  <img src="docs/images/places.png" alt="Places hierarchy with image" width="800">
+</p>
+
+### Knowledge
+Flexible entries for races, religions, magic systems, objects, and anything else your world needs — connected to characters, places, and other entries.
+
+### Automatic linking
+Names and aliases of characters, places, and knowledge entries are linked automatically wherever they appear in your manuscript.
+
+### Progress tracking
+Track manuscript word count, daily writing, and progress toward your word goal.
+
+<!-- BILD 6 (Fortschritt): Die Statistik-/Zielansicht mit Wortzahl, Tagesfortschritt und Zielbalken.
+     Datei: docs/images/progress.png -->
+<p align="center">
+  <img src="docs/images/progress.png" alt="Word count and goal progress" width="800">
+</p>
+
+### Project-wide search
+Search the whole project and replace text throughout the manuscript.
+
+<!-- BILD 7 (Suche, optional): Suchfeld mit Ergebnisliste über Kapitel und Profile.
+     Datei: docs/images/search.png -->
+<p align="center">
+  <img src="docs/images/search.png" alt="Project-wide search and replace" width="800">
+</p>
+
+## Quick start
+
+**Requirements:** [Node.js](https://nodejs.org/) 22.12 or newer.
+
+```bash
+git clone https://github.com/VaIenx/Mycel.git
+cd Mycel
 npm install
 npm start
 ```
 
-On Linux, build Mycel as a standalone desktop app:
+Then create a new project, pick a parent folder, and start writing. To look around first, open the included demo project (see below).
 
-```sh
+### Demo project
+
+`Mycel-Testprojekt/` ships with sample chapters, linked characters, hierarchical places with images, and connected knowledge entries. Open that folder in Mycel to explore every feature with real content.
+
+### Build for Linux
+
+Standalone desktop app:
+
+```bash
 npm run build:linux
 ```
 
-The runnable app folder and desktop entry are created in `dist/Mycel-linux-x64`. The desktop shortcut opens Mycel directly without `npm start`.
+The app folder and a desktop entry are created in `dist/Mycel-linux-x64`. The shortcut starts Mycel directly, no `npm start` needed.
 
-To build an RPM package for Linux x86_64, install `rpmbuild` and run:
+RPM package (Linux x86_64, requires `rpmbuild`):
 
-```sh
+```bash
 npm run build:rpm
 ```
 
-The RPM is created in `dist/` with a system application shortcut and icon.
+The RPM lands in `dist/` with a system application shortcut and icon.
 
-## Demo project
+## How your project is stored
 
-`Mycel-Testprojekt` includes sample chapters, linked characters, hierarchical places with images, and connected knowledge entries. Open the folder in Mycel to explore these features.
+Creating a project makes a folder with this structure:
 
-## Ideas for future extensions
-
-- Plan scenes with a point of view, purpose, and short summary.
-- Keep chapter snapshots so earlier drafts can be compared or restored.
-- Export a manuscript to DOCX, PDF, or EPUB with configurable formatting.
-- Reorder chapters and scenes directly in the outline.
-- Add project backups with a simple restore flow.
-
-## Project files
-
-Choose a parent folder when creating a project. Mycel creates a project folder with this structure:
-
-```text
+```
 My Novel/
 ├── Chapters/             One Markdown file per chapter
 ├── Characters/           One Markdown profile per character
@@ -67,16 +133,32 @@ My Novel/
     └── project.json      Organization, profiles, goal, and daily totals
 ```
 
-Chapter text, character profiles, places, and knowledge entries remain readable and editable outside Mycel. The small `.mycel/project.json` file stores organization and progress data; it does not contain the manuscript text. Back up the whole project folder to preserve a project.
+Everything stays readable and editable outside Mycel. `.mycel/project.json` only holds organization and progress data, never your manuscript text. **To back up a project, copy the whole folder.**
 
-## Development
-
-The desktop app uses Electron and plain HTML, CSS, and JavaScript. See [BUILDING.md](BUILDING.md) for the source layout and development commands.
+<!-- BILD 8 (optional, aber stark): Screenshot des Dateimanagers mit geöffnetem Projektordner,
+     das zeigt, dass alles normale .md-Dateien sind. Datei: docs/images/files.png -->
+<p align="center">
+  <img src="docs/images/files.png" alt="Project folder with plain Markdown files" width="700">
+</p>
 
 ## Privacy
 
-Mycel works with local folders and does not require an account. It does not upload manuscript content. Project files stay on your computer unless you move or sync them yourself.
+Mycel works with local folders and needs no account. It never uploads your manuscript. Your files stay on your computer unless you move or sync them yourself.
+
+## Roadmap
+
+- [ ] Scene planning with point of view, purpose, and short summary
+- [ ] Chapter snapshots to compare and restore earlier drafts
+- [x] Export to DOCX, PDF, and EPUB with configurable formatting
+- [ ] Reorder chapters and scenes directly in the outline
+- [ ] Project backups with a simple restore flow
+
+## Development
+
+Mycel is built with Electron and plain HTML, CSS, and JavaScript — no framework. See [BUILDING.md](BUILDING.md) for the source layout and development commands.
+
+Issues and ideas are welcome.
 
 ## License
 
-Mycel is distributed under the [MIT License](LICENSE).
+Released under the [MIT License](LICENSE) by [Valenx](https://github.com/VaIenx).
