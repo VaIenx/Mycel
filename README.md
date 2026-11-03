@@ -125,10 +125,9 @@ Creating a project makes a folder with this structure:
 My Novel/
 ├── Chapters/             One Markdown file per chapter
 ├── Characters/           One Markdown profile per character
-│   └── images/           Portraits selected in Mycel
 ├── Places/               One Markdown profile per place
-│   └── images/           Place images selected in Mycel
 ├── Knowledge/            One Markdown profile per knowledge entry
+├── Media/                All your images in one place
 └── .mycel/
     └── project.json      Organization, profiles, goal, and daily totals
 ```
