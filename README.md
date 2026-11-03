@@ -38,10 +38,10 @@ Most writing tools either bury your manuscript in a proprietary format or leave 
 ## Features
 
 ### Chapters
-Write and organize chapters by volume, status, and order.
+Write and organize chapters by volume, status, order, and optional point of view. Filter chapters by their POV character.
 
 ### Characters
-Profiles with roles, aliases, descriptions, portraits, and relationships.
+Profiles with roles, aliases, descriptions, portraits, relationships, and links to chapters told from their perspective.
 
 <!-- BILD 3 (Charakter-Ansicht): Ein ausgefülltes Charakterprofil mit Porträt, Aliasen und Beziehungen.
      Datei: docs/images/characters.png -->
@@ -97,7 +97,7 @@ Then create a new project, pick a parent folder, and start writing. To look arou
 
 ### Demo project
 
-`Mycel-Testprojekt/` ships with sample chapters, linked characters, hierarchical places with images, and connected knowledge entries. Open that folder in Mycel to explore every feature with real content.
+`Mycel-Testprojekt/` ships with sample chapters and POV assignments, linked characters, hierarchical places, and connected knowledge entries. Images are stored under `Media/`. Open that folder in Mycel to explore the project structure with real content.
 
 ### Build for Linux
 

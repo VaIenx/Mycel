@@ -451,7 +451,10 @@ select {
 .chapter-grid.list-view .chapter-card h3 {
   margin: 0;
 }
-.chapter-grid.list-view .chapter-card .status {
+.chapter-grid.list-view .chapter-card .chapter-card-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   grid-column: 2;
   grid-row: 1;
 }
@@ -465,6 +468,22 @@ select {
 }
 .chapter-grid.list-view .chapter-card .card-foot {
   margin-top: 6px;
+}
+.chapter-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.chapter-pov {
+  display: inline-flex;
+  width: max-content;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--chapter-pov-color), #556b59 35%);
+  border-radius: 99px;
+  background: var(--chapter-pov-color);
+  color: #3f5848;
+  font-size: 11px;
 }
 .chapter-card:hover,
 .character-card:hover {
@@ -640,9 +659,9 @@ select {
 }
 .rail-item {
   display: grid;
-  grid-template-columns: 15px 21px 1fr;
+  grid-template-columns: 15px 21px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   text-align: left;
   background: transparent;
   border: 0;
@@ -650,6 +669,24 @@ select {
   padding: 10px 6px;
   color: #765c43;
   font-size: 12px;
+}
+.rail-title-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.rail-title-wrap .rail-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rail-pov {
+  overflow: hidden;
+  color: #7a634e;
+  font-size: 10px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .rail-item.active {
   background: #dce6da;
@@ -663,11 +700,30 @@ select {
 }
 .editor-crumb {
   align-self: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
   border-radius: 12px;
   background: #ffe2af;
   padding: 12px 20px;
   margin-bottom: 12px;
   font-size: 13px;
+}
+.editor-pov-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.editor-pov-control select {
+  min-width: 130px;
+  padding: 4px 8px;
+  border: 1px solid #c9b392;
+  border-radius: 6px;
+  background: #fff8ee;
+  color: #3b2a1a;
+  font-size: 12px;
 }
 .editor-wrap {
   flex: 1;
@@ -3822,9 +3878,7 @@ body::before {
   }
 }
 
-.editor-tools .editor-mark-action,
-.editor-tools .editor-mark-toggle,
-.editor-tools .editor-question-count {
+.editor-tools .editor-mark-action {
   min-height: 34px;
   padding: 6px 10px;
   border: 1px solid #d5dfd5;
@@ -3834,9 +3888,7 @@ body::before {
   font-size: 12px;
 }
 
-.editor-tools .editor-mark-action:hover,
-.editor-tools .editor-mark-toggle:hover,
-.editor-tools .editor-question-count:hover {
+.editor-tools .editor-mark-action:hover {
   background: #eef4ec;
 }
 
@@ -3845,8 +3897,60 @@ body::before {
   color: #8b6339;
 }
 
-.editor-tools .editor-question-count {
-  background: #edf3eb;
+.editor-tools .editor-mark-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid #d5dfd5;
+  border-radius: 999px;
+  background: #f0f5f0;
+  color: #46634f;
+  font-size: 12px;
+}
+
+.editor-tools .editor-mark-toggle .toggle-label {
+  white-space: nowrap;
+}
+
+.editor-tools .editor-mark-toggle .toggle-track {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 30px;
+  height: 18px;
+  border-radius: 999px;
+  background: #c9d7c9;
+  transition: background 0.2s ease;
+}
+
+.editor-tools .editor-mark-toggle .toggle-thumb {
+  position: absolute;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(21, 29, 24, 0.15);
+  transition: transform 0.2s ease;
+}
+
+.editor-tools .editor-mark-toggle.is-on {
+  background: #e2f0e4;
+  border-color: #aac9ae;
+}
+
+.editor-tools .editor-mark-toggle.is-on .toggle-track {
+  background: #4d7a5c;
+}
+
+.editor-tools .editor-mark-toggle.is-on .toggle-thumb {
+  transform: translateX(12px);
+}
+
+.editor-tools .editor-mark-toggle:hover {
+  background: #eaf2ea;
 }
 
 .editor-workspace {
@@ -4061,147 +4165,6 @@ body::before {
   color: #63776a;
   cursor: pointer;
   font-weight: 600;
-}
-
-.timeline-view-toggle {
-  display: inline-flex;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid #dce3db;
-  border-radius: 9px;
-  background: #e9eee8;
-}
-
-.timeline-view-toggle button {
-  min-height: 34px;
-  padding: 7px 13px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #66776c;
-  font-size: 12px;
-}
-
-.timeline-view-toggle button.active {
-  background: #fff;
-  color: #2e4b3b;
-  box-shadow: 0 1px 4px rgba(37, 58, 49, 0.1);
-  font-weight: 650;
-}
-
-.plot-thread-scroll {
-  min-height: 440px;
-  border: 1px solid #dce3db;
-  border-radius: 13px;
-  background-color: #f9faf7;
-  background-image:
-    linear-gradient(rgba(74, 103, 80, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(74, 103, 80, 0.035) 1px, transparent 1px);
-  background-size: 24px 24px;
-}
-
-.plot-tree-canvas {
-  --plot-node-width: 260px;
-  display: flex;
-  width: max-content;
-  min-width: 100%;
-  min-height: 100%;
-  flex-direction: column;
-  gap: 25px;
-  padding: 24px;
-}
-
-.plot-thread-node {
-  position: relative;
-  display: flex;
-  width: max-content;
-  align-items: center;
-  gap: 27px;
-}
-
-.plot-thread-node:not(:has(.plot-thread-children)) {
-  padding-right: 1px;
-}
-
-.plot-thread-card {
-  position: relative;
-  width: var(--plot-node-width);
-  min-width: 170px;
-  padding: 14px;
-  border: 1px solid #cbd9cb;
-  border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 4px 12px rgba(37, 58, 49, 0.07);
-}
-
-.plot-thread-node.has-children > .plot-thread-card::after {
-  position: absolute;
-  top: 50%;
-  left: 100%;
-  width: 27px;
-  height: 1px;
-  background: #819984;
-  content: "";
-}
-
-.plot-thread-card-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: -3px 20px 7px 0;
-  color: #809084;
-  font-size: 9px;
-  font-weight: 650;
-  letter-spacing: 0.7px;
-  text-transform: uppercase;
-}
-
-.plot-thread-card h2 {
-  margin: 0 0 9px;
-  color: #30473a;
-  font: 18px/1.25 var(--serif);
-}
-
-.plot-thread-card > p {
-  margin: 10px 0;
-  color: #526259;
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-}
-
-.plot-thread-card > .plot-thread-empty-note,
-.plot-thread-chapter {
-  color: #879389;
-  font-size: 11px;
-}
-
-.plot-thread-branch-count {
-  margin-top: 11px;
-  padding-top: 8px;
-  border-top: 1px solid #edf0ec;
-  color: #728579;
-  font-size: 10px;
-}
-
-.plot-thread-children {
-  display: flex;
-  min-height: 70px;
-  flex-direction: column;
-  justify-content: center;
-  gap: 14px;
-  padding: 12px 0 12px 27px;
-  border-left: 1px solid #819984;
-}
-
-.plot-thread-children > .plot-thread-node::before {
-  position: absolute;
-  top: 50%;
-  right: 100%;
-  width: 27px;
-  height: 1px;
-  background: #819984;
-  content: "";
 }
 
 @media (max-width: 900px) {

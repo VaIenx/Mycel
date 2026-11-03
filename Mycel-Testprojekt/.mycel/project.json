@@ -8,6 +8,7 @@
       "status": "Fertig",
       "volume": "Band 1 · Ankunft",
       "target": 1800,
+      "pov": "Mira Vel",
       "updated": "2026-10-15T18:20:00.000Z"
     },
     "02-das-archiv": {
@@ -16,6 +17,7 @@
       "status": "In Arbeit",
       "volume": "Band 1 · Ankunft",
       "target": 2200,
+      "pov": "Mira Vel",
       "updated": "2026-10-16T16:40:00.000Z"
     },
     "03-die-stimme-im-glas": {
@@ -24,6 +26,7 @@
       "status": "Entwurf",
       "volume": "Band 1 · Ankunft",
       "target": 2000,
+      "pov": "Senn",
       "updated": "2026-10-14T12:00:00.000Z"
     },
     "04-ein-neuer-anfang": {
@@ -32,6 +35,7 @@
       "status": "Entwurf",
       "volume": "Band 2 · Verbindungen",
       "target": 2400,
+      "pov": "Mira Vel",
       "updated": "2026-10-13T09:00:00.000Z"
     }
   },
@@ -42,7 +46,7 @@
       "aliases": ["Mira", "Kartografin"],
       "description": "Eine junge Kartografin, die lieber Fragen stellt, als einer fertigen Karte zu vertrauen. Sie sucht nach ihrem verschollenen Bruder.",
       "traits": "Beobachtet genau · zeichnet auf alles, was sie nicht versteht · trägt einen Messingkompass ihrer Mutter",
-      "image": "Characters/images/mira-vel.svg",
+      "image": "Media/mira-vel.svg",
       "color": "#d4e8cf",
       "relationships": [
         { "target": "oren-thal", "type": "alter Freund" },
@@ -55,7 +59,7 @@
       "aliases": ["Oren", "der Fährmann"],
       "description": "Ein schweigsamer Fährmann aus Brückenruh. Er kennt die Flusswege, verschweigt aber, weshalb er das Archiv meidet.",
       "traits": "Ruhig · kennt alte Lieder · schuldet Mira eine Erklärung",
-      "image": "Characters/images/oren-thal.svg",
+      "image": "Media/oren-thal.svg",
       "color": "#d5e2ee",
       "relationships": [{ "target": "mira-vel", "type": "alte Freundschaft" }]
     },
@@ -81,7 +85,7 @@
       "parent": "",
       "description": "Ein kühler Landstrich aus uralten Wäldern, Mooren und Handelswegen.",
       "traits": "Lange Dämmerung · viele alte Grenzsteine",
-      "image": "Places/images/norden.svg",
+      "image": "Media/norden.svg",
       "color": "#d8e9d5"
     },
     "brueckenruh": {
@@ -94,7 +98,7 @@
       "parent": "norden",
       "description": "Eine kleine Stadt an drei Flussarmen. Die Häuser stehen auf alten Eichenpfählen, und jede Brücke trägt einen anderen Namen.",
       "traits": "Markt am Donnerstag · Fähre zum Wurzelwald",
-      "image": "Places/images/brueckenruh.svg",
+      "image": "Media/brueckenruh.svg",
       "color": "#d5e2ee"
     },
     "wurzelwald": {
@@ -107,7 +111,7 @@
       "parent": "norden",
       "description": "Ein Wald, dessen mächtige Wurzeln Hohlräume unter dem Boden formen. Bei Regen hört man dort ein leises Summen.",
       "traits": "Nasses Moos · silberne Pilze · Wege verändern sich",
-      "image": "Places/images/wurzelwald.svg",
+      "image": "Media/wurzelwald.svg",
       "color": "#cfe4ce"
     },
     "das-archiv": {
@@ -120,7 +124,7 @@
       "parent": "wurzelwald",
       "description": "Eine versiegelte Bibliothek tief unter dem ältesten Baum. Die Regale wachsen aus Holz und Stein, als wären sie Teil des Bodens.",
       "traits": "Eingang hinter einer Mooswand · ruhige, kreisförmige Räume",
-      "image": "Places/images/archiv.svg",
+      "image": "Media/archiv.svg",
       "color": "#e7ddc7"
     }
   },

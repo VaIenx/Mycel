@@ -678,6 +678,7 @@ async function readProject() {
       );
       const collection = kind === "knowledge" ? "knowledge" : kind + "s";
       const record = { ...((metadata[collection] || {})[id] || {}) };
+      if (kind === "chapter") record.pov ||= "";
       if (kind === "character") {
         const frontmatter = body.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
         if (frontmatter) {
@@ -826,9 +827,6 @@ async function readProject() {
       : [],
     editorMarks: Array.isArray(metadata.editorMarks)
       ? metadata.editorMarks
-      : [],
-    plotThreads: Array.isArray(metadata.plotThreads)
-      ? metadata.plotThreads
       : [],
   };
 }
@@ -993,6 +991,7 @@ function registerIpc() {
           status: String(chapter.status || "Entwurf"),
           volume: String(chapter.volume || "Band 1"),
           target: Number(chapter.target) || 0,
+          pov: String(chapter.pov || "").trim(),
           updated: new Date().toISOString(),
         },
       },
@@ -1005,14 +1004,10 @@ function registerIpc() {
     const chapters = await readMetadataPart("chapters");
     delete chapters[id];
     const editorMarks = await readMetadataPart("editorMarks");
-    const plotThreads = await readMetadataPart("plotThreads");
     await writeMetadata({
       chapters,
       editorMarks: (Array.isArray(editorMarks) ? editorMarks : []).filter(
         (mark) => mark.chapterId !== id,
-      ),
-      plotThreads: (Array.isArray(plotThreads) ? plotThreads : []).map((thread) =>
-        thread.chapterId === id ? { ...thread, chapterId: "" } : thread,
       ),
     });
     return true;
@@ -1390,31 +1385,6 @@ ${record.description}
       }))
       .filter((mark) => mark.end >= mark.start && mark.quote && mark.note);
     await writeMetadata({ editorMarks });
-    return readProject();
-  });
-  ipcMain.handle("plot-threads:save", async (_event, threadValues) => {
-    const project = await readProject();
-    const chapterIds = new Set(project.chapters.map((chapter) => chapter.id));
-    const plotThreads = (Array.isArray(threadValues) ? threadValues : [])
-      .filter((thread) => thread && thread.title)
-      .map((thread, index) => ({
-        id: safeId(thread.id || `thread-${Date.now()}-${index}`),
-        title: String(thread.title).trim().slice(0, 240),
-        note: String(thread.note || "").slice(0, 10000),
-        chapterId: chapterIds.has(String(thread.chapterId || ""))
-          ? String(thread.chapterId)
-          : "",
-        parentId: String(thread.parentId || ""),
-        order: Number.isFinite(Number(thread.order))
-          ? Number(thread.order)
-          : index,
-      }));
-    const ids = new Set(plotThreads.map((thread) => thread.id));
-    plotThreads.forEach((thread) => {
-      if (!ids.has(thread.parentId) || thread.parentId === thread.id)
-        thread.parentId = "";
-    });
-    await writeMetadata({ plotThreads });
     return readProject();
   });
   ipcMain.handle("manuscript:export", async (_event, options = {}) => {

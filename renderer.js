@@ -1,12 +1,4 @@
 const api = window.mycel;
-function loadCollapsedPlotThreads() {
-  try {
-    return new Set(JSON.parse(localStorage.getItem("mycel-collapsed-plot") || "[]"));
-  } catch {
-    return new Set();
-  }
-}
-
 const state = {
   project: null,
   recentProjects: [],
@@ -26,12 +18,6 @@ const state = {
     160,
     Math.max(50, Number(localStorage.getItem("mycel-timeline-zoom")) || 100),
   ),
-  timelineView: ["timeline", "plot"].includes(
-    localStorage.getItem("mycel-timeline-view"),
-  )
-    ? localStorage.getItem("mycel-timeline-view")
-    : "timeline",
-  collapsedPlotThreads: loadCollapsedPlotThreads(),
   editorMarksVisible: localStorage.getItem("mycel-editor-marks-visible") !== "false",
   writingMode: ["normal", "blinders", "typewriter"].includes(
     localStorage.getItem("mycel-writing-mode"),
@@ -503,6 +489,13 @@ function renderHome() {
 }
 
 function chapterCard(ch, index) {
+  const povCharacter = state.project.characters.find(
+    (character) =>
+      ch.pov &&
+      (character.id === ch.pov ||
+        character.name?.toLocaleLowerCase("de-DE") ===
+          ch.pov.toLocaleLowerCase("de-DE")),
+  );
   const status = ch.status || "Entwurf";
   const statuses = [
     ...new Set([
@@ -515,11 +508,12 @@ function chapterCard(ch, index) {
   ].sort();
   const statusIndex = statuses.indexOf(status);
   const statusHue = Math.round(statusIndex * 137.508) % 360;
+  const povColor = povCharacter ? characterColor(povCharacter) : "#e5ebe0";
   return html`<article
     class="chapter-card"
     data-action="write-chapter"
     data-id="${esc(ch.id)}"
-    style="--chapter-status-color: hsl(${statusHue} 32% 87%)"
+    style="--chapter-status-color: hsl(${statusHue} 32% 87%); --chapter-pov-color: ${povColor}"
   >
     <button
       class="card-edit"
@@ -530,7 +524,12 @@ function chapterCard(ch, index) {
       ···</button
     ><span class="chapter-number">${index + 1}</span>
     <h3>${esc(ch.title || ch.id)}</h3>
-    <span class="status">${esc(status)}</span>
+    <div class="chapter-card-badges">
+      <span class="status">${esc(status)}</span>
+      ${ch.pov
+        ? html`<span class="chapter-pov">POV: ${esc(ch.pov)}</span>`
+        : ""}
+    </div>
     <div class="volume-label">${esc(ch.volume || "Band 1")}</div>
     <p class="chapter-excerpt">
       ${esc(
@@ -553,6 +552,8 @@ function chapterCard(ch, index) {
 
 function renderChapters() {
   const chapters = state.project.chapters;
+  const povs = [...new Set(chapters.map((chapter) => chapter.pov).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "de"));
   const cards = chapters.length
     ? chapters.map(chapterCard).join("")
     : emptyState(
@@ -577,6 +578,10 @@ function renderChapters() {
           .sort((a, b) => a.localeCompare(b, "de", { numeric: true }))
           .map((v) => html`<option>${esc(v)}</option>`)
           .join("")}</select
+      ><select class="select-like" id="pov-filter">
+        <option value="all">POV: Alle</option>
+        ${povs.map((pov) => html`<option value="${esc(pov)}">${esc(pov)}</option>`).join("")}
+      </select
       ><input
         id="chapter-search"
         class="search"
@@ -2391,6 +2396,12 @@ function renderWriting() {
   const chapterMarks = (state.project.editorMarks || []).filter(
     (mark) => mark.chapterId === chapter.id,
   );
+  const povOptions = [
+    ...new Set([
+      ...state.project.characters.map((character) => character.name),
+      ...state.project.chapters.map((item) => item.pov).filter(Boolean),
+    ]),
+  ].sort((a, b) => a.localeCompare(b, "de"));
   const ordered = [...chapters].sort(
     (a, b) => (a.order ?? 9999) - (b.order ?? 9999),
   );
@@ -2410,7 +2421,12 @@ function renderWriting() {
                 data-id="${esc(ch.id)}"
               >
                 <span>⠿</span><span>${i + 1}.</span
-                ><span>${esc(ch.title || ch.id)}</span
+                ><span class="rail-title-wrap">
+                  <span class="rail-title">${esc(ch.title || ch.id)}</span>
+                  ${ch.pov
+                    ? html`<small class="rail-pov">POV: ${esc(ch.pov)}</small>`
+                    : ""}
+                </span
                 ><small>${format(wordCount(ch.body))}</small>
               </button>`,
           )
@@ -2428,6 +2444,18 @@ function renderWriting() {
       <div class="editor-crumb">
         ${esc(chapter.volume || "Band 1")} &nbsp;/&nbsp;
         <strong>${esc(chapter.title || chapter.id)}</strong>
+        <label class="editor-pov-control">
+          POV
+          <select id="editor-chapter-pov" class="select-like">
+            <option value="">Keine Perspektive</option>
+            ${povOptions
+              .map(
+                (pov) =>
+                  html`<option value="${esc(pov)}" ${chapter.pov === pov ? "selected" : ""}>${esc(pov)}</option>`,
+              )
+              .join("")}
+          </select>
+        </label>
       </div>
       <div
         class="editor-tools toolbar"
@@ -2441,20 +2469,20 @@ function renderWriting() {
         ><button data-format="quote">❞</button
         ><button data-format="list">☷</button
         ><button data-format="scene">— ✦ —</button
-        ><i class="editor-tools-sep"></i
-        ><button data-action="save-now">✓ Gespeichert</button>
-        <i class="editor-tools-sep"></i>
+        ><i class="editor-tools-sep"></i>
         <button class="editor-mark-action" data-action="add-editor-mark" data-mark-type="question">
           ? Offene Frage
         </button>
         <button class="editor-mark-action" data-action="add-editor-mark" data-mark-type="note">
           ✎ Änderungsnotiz
         </button>
-        <button class="editor-mark-toggle" data-action="toggle-editor-marks">
-          ${state.editorMarksVisible ? "Markierungen ausblenden" : "Markierungen einblenden"}
-        </button>
-        <button class="editor-question-count" data-page="questions">
-          Alle Markierungen · ${(state.project.editorMarks || []).length}
+        <button
+          class="editor-mark-toggle ${state.editorMarksVisible ? "is-on" : ""}"
+          data-action="toggle-editor-marks"
+          aria-pressed="${state.editorMarksVisible}"
+        >
+          <span class="toggle-label">Markierungen</span>
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
         </button>
         <label class="writing-mode-control" for="writing-mode">
           Schreibmodus
@@ -2695,162 +2723,6 @@ function renderQuestions() {
       : ""}`;
 }
 
-function renderPlotThreadNode(thread, threads, chapters, ancestors = new Set()) {
-  if (ancestors.has(thread.id)) return "";
-  const nextAncestors = new Set(ancestors).add(thread.id);
-  const children = threads
-    .filter((item) => item.parentId === thread.id)
-    .sort((left, right) => left.order - right.order);
-  const chapter = chapters.find((item) => item.id === thread.chapterId);
-  const collapsed = state.collapsedPlotThreads.has(thread.id);
-  return html`<div class="plot-thread-node ${children.length ? "has-children" : ""}">
-    <article class="plot-thread-card">
-      <div class="plot-thread-card-toolbar">
-        <span>Handlungsfaden</span>
-        <div class="timeline-event-options">
-          <button
-            class="timeline-options-button"
-            data-action="plot-options"
-            aria-label="Optionen für ${esc(thread.title)}"
-            aria-haspopup="true"
-            aria-expanded="false"
-          >
-            ⚙
-          </button>
-          <div class="timeline-event-menu" data-plot-thread-menu hidden>
-            <button data-action="plot-thread-add-child" data-id="${esc(thread.id)}">Ast hinzufügen</button>
-            ${children.length
-              ? html`<button data-action="plot-thread-collapse" data-id="${esc(thread.id)}">
-                  ${collapsed ? "Äste öffnen" : "Äste schließen"}
-                </button>`
-              : ""}
-            <button data-action="plot-thread-edit" data-id="${esc(thread.id)}">Bearbeiten</button>
-            <button class="danger" data-action="plot-thread-delete" data-id="${esc(thread.id)}">Knoten entfernen</button>
-          </div>
-        </div>
-      </div>
-      <h2>${esc(thread.title)}</h2>
-      ${chapter
-        ? html`<button class="timeline-chapter" data-action="write-chapter" data-id="${esc(chapter.id)}">
-            ${esc(chapter.title || chapter.id)}
-          </button>`
-        : '<span class="plot-thread-chapter">Kein Kapitel zugeordnet</span>'}
-      ${thread.note ? html`<p>${esc(thread.note)}</p>` : '<p class="plot-thread-empty-note">Noch keine Notiz.</p>'}
-      ${children.length
-        ? html`<div class="plot-thread-branch-count">
-            ${collapsed ? "Äste eingeklappt" : `${children.length} ${children.length === 1 ? "Ast" : "Äste"}`}
-          </div>`
-        : ""}
-    </article>
-    ${children.length && !collapsed
-      ? html`<div class="plot-thread-children">
-          ${children
-            .map((child) =>
-              renderPlotThreadNode(child, threads, chapters, nextAncestors),
-            )
-            .join("")}
-        </div>`
-      : ""}
-  </div>`;
-}
-
-function renderPlotThreadView() {
-  const threads = [...(state.project.plotThreads || [])].sort(
-    (left, right) => left.order - right.order,
-  );
-  const ids = new Set(threads.map((thread) => thread.id));
-  let roots = threads.filter(
-    (thread) => !thread.parentId || !ids.has(thread.parentId),
-  );
-  if (!roots.length && threads.length) roots = threads.slice(0, 1);
-  return html`<div class="timeline-scroll plot-thread-scroll">
-    ${roots.length
-      ? html`<div
-          class="plot-tree-canvas"
-          style="--plot-node-width:${Math.round(260 * (state.timelineZoom / 100))}px"
-        >
-          ${roots
-            .map((thread) =>
-              renderPlotThreadNode(
-                thread,
-                threads,
-                state.project.chapters,
-              ),
-            )
-            .join("")}
-        </div>`
-      : '<div class="timeline-empty"><strong>Noch keine Handlungsfäden</strong><span>Lege einen Hauptstrang an und ergänze über die Knoten verzweigte Äste.</span></div>'}
-  </div>`;
-}
-
-function plotThreadDescendants(id, threads, result = new Set()) {
-  threads
-    .filter((thread) => thread.parentId === id)
-    .forEach((thread) => {
-      if (result.has(thread.id)) return;
-      result.add(thread.id);
-      plotThreadDescendants(thread.id, threads, result);
-    });
-  return result;
-}
-
-function editPlotThread(existing = null, parentId = "") {
-  const threads = state.project.plotThreads || [];
-  const excluded = existing
-    ? plotThreadDescendants(existing.id, threads, new Set([existing.id]))
-    : new Set();
-  const chapters = [...state.project.chapters].sort(
-    (left, right) => (left.order ?? 9999) - (right.order ?? 9999),
-  );
-  openDialog(
-    existing ? "Handlungsfaden bearbeiten" : "Handlungsfaden anlegen",
-    html`<div class="form-grid">
-      <label class="field full">Name<input name="title" required autofocus value="${esc(existing?.title || "")}" placeholder="Zum Beispiel: Die Suche nach dem Erbstück" /></label>
-      <label class="field full">Notiz<textarea name="note" rows="5" placeholder="Was geschieht in diesem Handlungsfaden?">${esc(existing?.note || "")}</textarea></label>
-      <label class="field">Kapitel<select name="chapterId">
-        <option value="">Kein Kapitel zugeordnet</option>
-        ${chapters
-          .map(
-            (chapter) =>
-              html`<option value="${esc(chapter.id)}" ${chapter.id === existing?.chapterId ? "selected" : ""}>${esc(chapter.title || chapter.id)}</option>`,
-          )
-          .join("")}
-      </select></label>
-      <label class="field">Vorgänger / übergeordneter Knoten<select name="parentId">
-        <option value="">Hauptstrang</option>
-        ${threads
-          .filter((thread) => !excluded.has(thread.id))
-          .map(
-            (thread) =>
-              html`<option value="${esc(thread.id)}" ${thread.id === (existing?.parentId || parentId) ? "selected" : ""}>${esc(thread.title)}</option>`,
-          )
-          .join("")}
-      </select></label>
-    </div>`,
-    async (data) => {
-      const title = String(data.get("title") || "").trim();
-      if (!title) return false;
-      const thread = {
-        ...(existing || {}),
-        id: existing?.id || crypto.randomUUID(),
-        title,
-        note: String(data.get("note") || "").trim(),
-        chapterId: String(data.get("chapterId") || ""),
-        parentId: String(data.get("parentId") || ""),
-        order: existing?.order ?? threads.length,
-      };
-      const updated = [...threads];
-      const index = updated.findIndex((item) => item.id === thread.id);
-      if (index >= 0) updated[index] = thread;
-      else updated.push(thread);
-      state.project = await api.savePlotThreads(updated);
-      render();
-      toast(existing ? "Handlungsfaden aktualisiert." : "Handlungsfaden angelegt.");
-      return true;
-    },
-  );
-}
-
 function renderTimeline() {
   const chapters = [...state.project.chapters].sort(
     (left, right) => (left.order ?? 9999) - (right.order ?? 9999),
@@ -2934,18 +2806,9 @@ function renderTimeline() {
       </article>`;
     })
     .join("");
-  const viewToggle = html`<div class="timeline-view-toggle" role="tablist" aria-label="Ansicht wählen">
-    <button type="button" role="tab" data-timeline-view="timeline" class="${state.timelineView === "timeline" ? "active" : ""}">Zeitstrahl</button>
-    <button type="button" role="tab" data-timeline-view="plot" class="${state.timelineView === "plot" ? "active" : ""}">Handlungsfäden</button>
-  </div>`;
-  const actions =
-    state.timelineView === "timeline"
-      ? html`<button class="button primary" data-action="timeline-add">
-          ＋ Ereignis hinzufügen
-        </button>`
-      : html`<button class="button primary" data-action="plot-thread-add">
-          ＋ Hauptstrang hinzufügen
-        </button>`;
+  const actions = html`<button class="button primary" data-action="timeline-add">
+    ＋ Ereignis hinzufügen
+  </button>`;
   const zoomControls = html`<div class="timeline-zoom-controls" aria-label="Ansichtszoom">
       <span>Zoom</span>
       <button
@@ -2969,10 +2832,7 @@ function renderTimeline() {
       </button>
       <span class="small-note">Strg + / Strg − · seitlich scrollen</span>
     </div>`;
-  if (state.timelineView === "plot")
-    return html`${heading("Handlungsfäden", actions)}${viewToggle}${zoomControls}${renderPlotThreadView()}`;
   return html`${heading("Zeitstrahl", actions)}
-    ${viewToggle}
     ${zoomControls}
     <div class="timeline-scroll">
       ${events.length
@@ -3273,8 +3133,10 @@ function showEntityTooltip(entity, event) {
 function applyChapterFilters() {
   const search = page.querySelector("#chapter-search");
   const filter = page.querySelector("#volume-filter");
+  const povFilter = page.querySelector("#pov-filter");
   const query = (search?.value || "").trim().toLocaleLowerCase("de-DE");
   const volume = filter?.value || "all";
+  const pov = povFilter?.value || "all";
   const cards = [...page.querySelectorAll(".chapter-card")];
   for (const card of cards) {
     const chapter = state.project.chapters.find(
@@ -3294,7 +3156,8 @@ function applyChapterFilters() {
     card.hidden =
       !chapter ||
       (query && !searchable.includes(query)) ||
-      (volume !== "all" && (chapter.volume || "Band 1") !== volume);
+      (volume !== "all" && (chapter.volume || "Band 1") !== volume) ||
+      (pov !== "all" && chapter.pov !== pov);
   }
   const empty = page.querySelector("[data-chapter-no-results]");
   if (empty) empty.hidden = cards.some((card) => !card.hidden);
@@ -3564,6 +3427,16 @@ function render() {
       updateHighlights();
       editor.focus();
     });
+    page.querySelector("#editor-chapter-pov")?.addEventListener(
+      "change",
+      async (event) => {
+        const chapter = currentChapter();
+        if (!chapter) return;
+        chapter.pov = event.currentTarget.value.trim();
+        await saveCurrentChapter();
+        toast(chapter.pov ? `POV gesetzt: ${chapter.pov}` : "POV entfernt.");
+      },
+    );
     const isTypewriter = () => state.writingMode === "typewriter";
     const moveCaretToEnd = () => {
       if (!isTypewriter()) return;
@@ -3756,6 +3629,12 @@ function openDialog(title, inner, onSubmit, submitLabel = "Speichern") {
 
 function editChapterForm(existing = null) {
   const editing = !!existing;
+  const povOptions = [
+    ...new Set([
+      ...state.project.characters.map((character) => character.name),
+      ...state.project.chapters.map((chapter) => chapter.pov).filter(Boolean),
+    ]),
+  ].sort((a, b) => a.localeCompare(b, "de"));
   openDialog(
     editing ? "Kapitel bearbeiten" : "Neues Kapitel",
     html`<div class="form-grid">
@@ -3789,6 +3668,19 @@ function editChapterForm(existing = null) {
             .join("")}
         </datalist></label
       ><label class="field"
+        >Perspektive (POV)<input
+          name="pov"
+          list="chapter-pov-options"
+          value="${esc(existing?.pov || '')}"
+          placeholder="Figur auswählen oder eingeben …"
+          autocomplete="off"
+        />
+        <datalist id="chapter-pov-options">
+          ${povOptions
+            .map((name) => html`<option value="${esc(name)}"></option>`)
+            .join("")}
+        </datalist></label
+      ><label class="field"
         >Reihenfolge<input
           name="order"
           type="number"
@@ -3817,6 +3709,7 @@ function editChapterForm(existing = null) {
         volume: data.get("volume").trim() || "Band 1",
         status: data.get("status").trim() || "Entwurf",
         target: Number(data.get("target")) || 0,
+        pov: String(data.get("pov") || "").trim(),
         body: existing?.body || "",
         order: Number(data.get("order")) || state.project.chapters.length + 1,
       };
@@ -3875,6 +3768,13 @@ function createChapter() {
 
 function openCharacter(ch) {
   state.activeCharacter = ch.id;
+  const povChapters = state.project.chapters.filter(
+    (chapter) =>
+      chapter.pov &&
+      (chapter.pov === ch.id ||
+        chapter.pov.toLocaleLowerCase("de-DE") ===
+          (ch.name || "").toLocaleLowerCase("de-DE")),
+  );
   const initials = String(ch.name || "?")
     .split(/\s+/)
     .slice(0, 2)
@@ -3966,6 +3866,24 @@ function openCharacter(ch) {
         <div class="relation-list">
           ${relationships ||
           '<span class="small-note">Noch keine Beziehungen festgehalten.</span>'}
+        </div>
+        <h3>Perspektivkapitel</h3>
+        <div class="character-pov-list">
+          ${povChapters.length
+            ? povChapters
+                .map(
+                  (chapter) =>
+                    html`<button
+                      type="button"
+                      class="button small"
+                      data-action="write-chapter"
+                      data-id="${esc(chapter.id)}"
+                    >
+                      ${esc(chapter.title || chapter.id)}
+                    </button>`,
+                )
+                .join("")
+            : '<span class="small-note">Keine Kapitel mit dieser Perspektive.</span>'}
         </div>
       </div>
     </div>`,
@@ -4564,20 +4482,13 @@ async function removeRecentProject(root) {
 
 document.addEventListener("click", async (event) => {
   if (
-    !event.target.closest('[data-action="timeline-options"]') &&
-    !event.target.closest('[data-action="plot-options"]')
+    !event.target.closest('[data-action="timeline-options"]')
   ) {
     document.querySelectorAll("[data-timeline-event-menu]").forEach((menu) => {
       menu.hidden = true;
     });
     document
       .querySelectorAll('[data-action="timeline-options"]')
-      .forEach((button) => button.setAttribute("aria-expanded", "false"));
-    document.querySelectorAll("[data-plot-thread-menu]").forEach((menu) => {
-      menu.hidden = true;
-    });
-    document
-      .querySelectorAll('[data-action="plot-options"]')
       .forEach((button) => button.setAttribute("aria-expanded", "false"));
   }
   const pageNavigation = event.target.closest("[data-page]");
@@ -4912,13 +4823,6 @@ document.addEventListener("click", async (event) => {
     setPage(pageButton.dataset.page);
     return;
   }
-  const timelineView = event.target.closest("[data-timeline-view]");
-  if (timelineView) {
-    state.timelineView = timelineView.dataset.timelineView;
-    localStorage.setItem("mycel-timeline-view", state.timelineView);
-    render();
-    return;
-  }
   const formatButton = event.target.closest("[data-format]");
   if (formatButton) {
     formatText(formatButton.dataset.format);
@@ -4927,67 +4831,6 @@ document.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]");
   if (!button) return;
   const action = button.dataset.action;
-  if (action === "plot-options") {
-    const menu = button.parentElement.querySelector("[data-plot-thread-menu]");
-    const open = menu.hidden;
-    document.querySelectorAll("[data-plot-thread-menu]").forEach((item) => {
-      item.hidden = true;
-    });
-    document
-      .querySelectorAll('[data-action="plot-options"]')
-      .forEach((item) => item.setAttribute("aria-expanded", "false"));
-    if (open) {
-      menu.hidden = false;
-      button.setAttribute("aria-expanded", "true");
-    }
-    return;
-  }
-  if (action === "plot-thread-add") {
-    editPlotThread();
-    return;
-  }
-  if (action === "plot-thread-add-child") {
-    editPlotThread(null, button.dataset.id);
-    return;
-  }
-  if (action === "plot-thread-collapse") {
-    if (state.collapsedPlotThreads.has(button.dataset.id))
-      state.collapsedPlotThreads.delete(button.dataset.id);
-    else state.collapsedPlotThreads.add(button.dataset.id);
-    localStorage.setItem(
-      "mycel-collapsed-plot",
-      JSON.stringify([...state.collapsedPlotThreads]),
-    );
-    render();
-    return;
-  }
-  if (action === "plot-thread-edit") {
-    const thread = state.project.plotThreads?.find(
-      (item) => item.id === button.dataset.id,
-    );
-    if (thread) editPlotThread(thread);
-    return;
-  }
-  if (action === "plot-thread-delete") {
-    const threads = state.project.plotThreads || [];
-    const thread = threads.find((item) => item.id === button.dataset.id);
-    if (
-      thread &&
-      confirm(`„${thread.title}“ entfernen? Darunterliegende Äste bleiben erhalten.`)
-    ) {
-      const updated = threads
-        .filter((item) => item.id !== thread.id)
-        .map((item) =>
-          item.parentId === thread.id
-            ? { ...item, parentId: thread.parentId || "" }
-            : item,
-        );
-      state.project = await api.savePlotThreads(updated);
-      render();
-      toast("Handlungsknoten entfernt.");
-    }
-    return;
-  }
   if (action === "add-editor-mark") {
     editEditorMark(button.dataset.markType);
     return;
@@ -5127,10 +4970,7 @@ document.addEventListener("click", async (event) => {
       dialog.open && dialog.contains(button),
     );
   } else if (action === "relationship-info") openRelationshipMap();
-  else if (action === "save-now") {
-    await saveCurrentChapter();
-    toast("Kapitel gespeichert.");
-  } else if (action === "save-goal") {
+  else if (action === "save-goal") {
     state.project = await api.saveSettings({
       goal: document.querySelector("#goal-input").value,
     });
@@ -5300,6 +5140,7 @@ document.addEventListener("submit", async (event) => {
 });
 document.addEventListener("change", (event) => {
   if (event.target.matches("#volume-filter")) applyChapterFilters();
+  if (event.target.matches("#pov-filter")) applyChapterFilters();
 });
 
 function openProjectSearch(mode = "find") {

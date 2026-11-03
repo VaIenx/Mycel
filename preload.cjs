@@ -25,8 +25,6 @@ contextBridge.exposeInMainWorld("mycel", {
   saveTimeline: (events) => ipcRenderer.invoke("timeline:save", events),
   saveEditorMarks: (marks) =>
     ipcRenderer.invoke("editor-marks:save", marks),
-  savePlotThreads: (threads) =>
-    ipcRenderer.invoke("plot-threads:save", threads),
   exportManuscript: (options) =>
     ipcRenderer.invoke("manuscript:export", options),
 });

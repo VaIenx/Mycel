@@ -3,7 +3,7 @@ name: "Oren Thal"
 role: "Begleiter"
 aliases: ["Oren", "der Fährmann"]
 traits: "Ruhig · kennt alte Lieder · schuldet Mira eine Erklärung"
-image: "Characters/images/oren-thal.svg"
+image: "Media/oren-thal.svg"
 color: "#d5e2ee"
 relationships: [{"target":"mira-vel","type":"alte Freundschaft"}]
 ---
