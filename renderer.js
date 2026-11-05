@@ -79,10 +79,13 @@ function savePreferences() {
   applyPreferences();
 }
 
+const htmlValue = (value) =>
+  Array.isArray(value) ? value.join("") : String(value);
+
 function html(strings, ...values) {
   return strings.reduce(
     (output, part, index) =>
-      output + part + (index < values.length ? String(values[index]) : ""),
+      output + part + (index < values.length ? htmlValue(values[index]) : ""),
     "",
   );
 }
@@ -189,6 +192,10 @@ function toast(message) {
 
 function setPage(next) {
   if (state.page === "writing" && next !== "writing") void saveCurrentChapter();
+  if (next !== "wiki") {
+    state.wikiEditing = false;
+    state.wikiDraft = null;
+  }
   state.page = next;
   document
     .querySelectorAll(".primary-nav [data-page]")
@@ -3092,6 +3099,7 @@ function highlightedText(
     }
     output += content;
   }
+  if (text.endsWith("\n")) output += "\u200b";
   return output;
 }
 
@@ -3542,8 +3550,8 @@ function render() {
       state.wikiArticle = `${mention.dataset.action.replace("open-", "")}|${mention.dataset.id}`;
       setPage("wiki");
     });
-  }
-  editor?.addEventListener("input", () => {
+
+    editor.addEventListener("input", () => {
     if (state.writingMode === "typewriter") {
       editor.setSelectionRange(editor.value.length, editor.value.length);
       keepTypewriterLineInView(editor);
@@ -3551,14 +3559,7 @@ function render() {
     const ch = currentChapter();
     if (!ch) return;
     ch.body = editor.value;
-    page.querySelector("#editor-highlight").innerHTML = highlightedText(
-      editor.value,
-      state.project.characters,
-      state.project.places,
-      state.project.knowledge,
-      editorMarks,
-      state.editorMarksVisible,
-    );
+    updateHighlights();
     const currentWords = wordCount(ch.body);
     page.querySelector("#word-count-live").textContent = format(currentWords);
     page.querySelector(".editor-status").lastElementChild.innerHTML = html`<b
@@ -3572,7 +3573,8 @@ function render() {
     state.saveTimer = setTimeout(() => {
       void saveCurrentChapter();
     }, 650);
-  });
+    });
+  }
 }
 
 async function saveCurrentChapter(newWords = 0) {
@@ -3586,6 +3588,7 @@ async function saveCurrentChapter(newWords = 0) {
       0,
       currentWords - (state.lastSavedWords ?? currentWords),
     );
+  const savedId = chapter.id;
   const result = await api.saveChapter({
     ...chapter,
     order: state.project.chapters.indexOf(chapter) + 1,
@@ -3595,12 +3598,16 @@ async function saveCurrentChapter(newWords = 0) {
   chapter.updated = new Date().toISOString();
   if (newWords > 0)
     state.project.history = await api.saveSession({ words: newWords });
-  state.lastSavedWords = currentWords;
+  if (state.activeChapter === savedId) {
+    state.activeChapter = chapter.id;
+    state.lastSavedWords = currentWords;
+  }
   const status = document.querySelector("#save-indicator");
   if (status) status.textContent = "Alle Änderungen gespeichert";
 }
 
 function openDialog(title, inner, onSubmit, submitLabel = "Speichern") {
+  dialog.className = "dialog";
   dialog.innerHTML = html`<form method="dialog" class="dialog-content">
     <h2>${esc(title)}</h2>
     ${inner}
@@ -3624,7 +3631,12 @@ function openDialog(title, inner, onSubmit, submitLabel = "Speichern") {
     const accepted = await onSubmit(new FormData(event.currentTarget));
     if (accepted !== false && dialog.open) dialog.close();
   });
-  dialog.querySelector("input,textarea,select")?.focus();
+  (
+    dialog.querySelector("[autofocus]") ||
+    dialog.querySelector(
+      "input:not([readonly]),textarea:not([readonly]),select",
+    )
+  )?.focus();
 }
 
 function editChapterForm(existing = null) {
@@ -4867,6 +4879,7 @@ document.addEventListener("click", async (event) => {
         `${mark.type === "question" ? "Offene Frage" : "Änderungsnotiz"} entfernen?`,
       )
     ) {
+      if (page.querySelector("#editor-text")) await saveCurrentChapter();
       state.project = await api.saveEditorMarks(
         marks.filter((item) => item.id !== mark.id),
       );
@@ -4958,6 +4971,7 @@ document.addEventListener("click", async (event) => {
   else if (action === "new-place") startWikiEntry("place");
   else if (action === "new-knowledge") startWikiEntry("knowledge");
   else if (action === "write-chapter") {
+    if (dialog.open) dialog.close();
     void saveCurrentChapter();
     state.activeChapter = button.dataset.id;
     setPage("writing");
@@ -5252,6 +5266,7 @@ function formatText(kind) {
     scene: ["\n\n* * *\n\n", ""],
   }[kind];
   if (kind === "undo" || kind === "redo") {
+    editor.focus();
     document.execCommand(kind);
     return;
   }
