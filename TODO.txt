@@ -1,1 +1,1 @@
-Keine offenen Aufgaben.
+Hoverinfos werden nicht mehr angezeigt und verlinken nicht mehr zu ihren Datein.

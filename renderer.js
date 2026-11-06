@@ -4023,46 +4023,78 @@ function render() {
     editor.addEventListener("cut", (event) => {
       if (isTypewriter()) event.preventDefault();
     });
-    highlight.addEventListener("pointerover", (event) => {
-      const mention = event.target.closest(".character-mention");
-      if (!mention) return;
+    // The transparent textarea lies above the highlight layer (so caret and
+    // selection stay visible on the paper background). It therefore receives
+    // all pointer events; find the mention underneath the pointer manually.
+    const tooltip = document.querySelector("#character-tooltip");
+    const mentionKey = (mention) =>
+      `${mention.dataset.action.replace("open-", "")}|${mention.dataset.id}`;
+    const mentionAt = (event) =>
+      document
+        .elementsFromPoint(event.clientX, event.clientY)
+        .find((element) => element.classList?.contains("character-mention")) ||
+      null;
+    const moveTooltip = (event) => {
+      tooltip.style.left = `${Math.min(event.clientX + 14, innerWidth - 270)}px`;
+      tooltip.style.top = `${Math.min(event.clientY + 16, innerHeight - 120)}px`;
+    };
+    let hoveredMention = "";
+    const hideMentionTooltip = () => {
+      hoveredMention = "";
+      tooltip.hidden = true;
+      editor.style.cursor = "";
+    };
+    const showMentionTooltip = (mention, event) => {
+      const kind = mention.dataset.action.replace("open-", "");
       const entities =
-        mention.dataset.action === "open-place"
+        kind === "place"
           ? state.project.places
-          : mention.dataset.action === "open-knowledge"
+          : kind === "knowledge"
             ? state.project.knowledge
             : state.project.characters;
       const entity = entities.find((item) => item.id === mention.dataset.id);
-      if (entity)
-        showEntityTooltip(
-          {
-            ...entity,
-            kind: mention.dataset.action.replace("open-", ""),
-          },
-          event,
-        );
-    });
-    highlight.addEventListener("pointermove", (event) => {
-      if (event.target.closest(".character-mention")) {
-        const tooltip = document.querySelector("#character-tooltip");
-        tooltip.style.left = `${Math.min(event.clientX + 14, innerWidth - 270)}px`;
-        tooltip.style.top = `${Math.min(event.clientY + 16, innerHeight - 120)}px`;
+      if (!entity) return hideMentionTooltip();
+      hoveredMention = mentionKey(mention);
+      showEntityTooltip({ ...entity, kind }, event);
+      tooltip.dataset.article = hoveredMention;
+    };
+    editor.addEventListener("pointermove", (event) => {
+      if (event.pointerType === "touch") return;
+      const mention = mentionAt(event);
+      if (!mention) {
+        if (hoveredMention) hideMentionTooltip();
+        return;
       }
+      editor.style.cursor = "pointer";
+      if (mentionKey(mention) !== hoveredMention)
+        showMentionTooltip(mention, event);
+      else moveTooltip(event);
     });
-    highlight.addEventListener("pointerout", (event) => {
-      if (
-        event.target.closest(".character-mention") &&
-        !event.relatedTarget?.closest?.(".character-mention")
-      )
-        document.querySelector("#character-tooltip").hidden = true;
+    editor.addEventListener("pointerleave", (event) => {
+      if (event.pointerType !== "touch") hideMentionTooltip();
     });
-    highlight.addEventListener("click", (event) => {
-      const mention = event.target.closest(".character-mention");
-      if (!mention) return;
+    editor.addEventListener("scroll", () => {
+      if (hoveredMention) hideMentionTooltip();
+    });
+    editor.addEventListener("input", () => {
+      if (hoveredMention) hideMentionTooltip();
+    });
+    editor.addEventListener("click", (event) => {
+      const mention = mentionAt(event);
+      if (!mention) {
+        if (hoveredMention) hideMentionTooltip();
+        return;
+      }
+      // Touch has no hover: a tap shows the info card and keeps the caret.
+      if (event.pointerType === "touch") {
+        showMentionTooltip(mention, event);
+        return;
+      }
+      if (editor.selectionStart !== editor.selectionEnd) return;
       event.preventDefault();
       event.stopPropagation();
-      document.querySelector("#character-tooltip").hidden = true;
-      state.wikiArticle = `${mention.dataset.action.replace("open-", "")}|${mention.dataset.id}`;
+      hideMentionTooltip();
+      state.wikiArticle = mentionKey(mention);
       setPage("wiki");
     });
 
