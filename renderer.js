@@ -5181,42 +5181,118 @@ document.addEventListener("click", async (event) => {
     removeWikiRelation.closest("[data-wiki-relation]").remove();
     return;
   }
-  if (event.target.closest("[data-wiki-image]")) {
-    const kind = page.querySelector("#wiki-editor-form").dataset.kind;
-    const image =
-      kind === "character"
-        ? await api.chooseCharacterImage()
-        : await api.choosePlaceImage();
-    if (!image) return;
-    const property = event.target.closest(".wiki-edit-property");
-    property.querySelector('[data-wiki-field="image"]').value = image;
-    let preview = property.querySelector(".wiki-edit-image");
-    if (!preview) {
-      preview = document.createElement("img");
-      preview.className = "wiki-edit-image";
-      preview.alt = "";
-      property.insertBefore(
-        preview,
-        property.querySelector("input[type=hidden]"),
-      );
-    }
-    preview.src = image;
-    let remove = property.querySelector("[data-wiki-remove-image]");
-    if (!remove) {
-      remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "button subtle";
-      remove.dataset.wikiRemoveImage = "";
-      remove.textContent = "Entfernen";
-      property.querySelector(".wiki-edit-image-actions").append(remove);
-    }
+   if (event.target.closest("[data-wiki-image]")) {
+    const form = page.querySelector("#wiki-editor-form");
+    const kind = form.dataset.kind;
+    const imageBox = event.target.closest(".wiki-edit-image-box");
+
+    if (!imageBox) return;
+
+    const imageInput = imageBox.querySelector(
+      '[data-wiki-field="image"]',
+    );
+
+    let media = await api.listMedia();
+
+    openDialog(
+      "Bild aus Medien auswählen",
+      html`<p class="quiet">
+          Wähle ein bereits vorhandenes Bild aus deinem Medienordner.
+        </p>
+        <div class="map-media-grid" data-wiki-media-list>
+          ${renderMapMediaOptions(media, imageInput.value)}
+        </div>
+        <button
+          type="button"
+          class="button small"
+          data-wiki-image-upload
+        >
+          ＋ Bild zum Medienordner hinzufügen …
+        </button>`,
+      (data) => {
+        const image = data.get("image");
+
+        if (!image) {
+          toast("Bitte wähle ein Bild aus dem Medienordner.");
+          return false;
+        }
+
+        imageInput.value = String(image);
+
+        imageBox.querySelector(".small-note")?.remove();
+
+        let preview = imageBox.querySelector(".wiki-edit-image");
+
+        if (!preview) {
+          preview = document.createElement("img");
+          preview.className = "wiki-edit-image";
+          preview.alt = "";
+          imageInput.before(preview);
+        }
+
+        preview.src = String(image);
+
+        let remove = imageBox.querySelector(
+          "[data-wiki-remove-image]",
+        );
+
+        if (!remove) {
+          remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "button subtle";
+          remove.dataset.wikiRemoveImage = "";
+          remove.textContent = "Entfernen";
+
+          imageBox
+            .querySelector(".wiki-edit-image-actions")
+            .append(remove);
+        }
+
+        return true;
+      },
+      "Bild verwenden",
+    );
+
+    dialog
+      .querySelector("[data-wiki-image-upload]")
+      .addEventListener("click", async () => {
+        const image =
+          kind === "character"
+            ? await api.chooseCharacterImage()
+            : await api.choosePlaceImage();
+
+        if (!image) return;
+
+        media = await api.listMedia();
+
+        dialog.querySelector("[data-wiki-media-list]").innerHTML =
+          renderMapMediaOptions(media, image);
+      });
+
     return;
   }
+
   if (event.target.closest("[data-wiki-remove-image]")) {
-    const property = event.target.closest(".wiki-edit-property");
-    property.querySelector('[data-wiki-field="image"]').value = "";
-    property.querySelector(".wiki-edit-image")?.remove();
+    const imageBox = event.target.closest(".wiki-edit-image-box");
+
+    if (!imageBox) return;
+
+    imageBox.querySelector('[data-wiki-field="image"]').value = "";
+    imageBox.querySelector(".wiki-edit-image")?.remove();
+
     event.target.closest("[data-wiki-remove-image]").remove();
+
+    if (!imageBox.querySelector(".small-note")) {
+      const note = document.createElement("span");
+      note.className = "small-note";
+      note.textContent = "Kein Bild ausgewählt";
+
+      imageBox.insertBefore(
+        note,
+        imageBox.querySelector('[data-wiki-field="image"]'),
+      );
+    }
+
     return;
   }
   const newEntry = event.target.closest("[data-action^='new-']");
