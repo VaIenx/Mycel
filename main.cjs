@@ -927,6 +927,16 @@ function registerIpc() {
       else target.maximize();
     } else if (action === "close") target.close();
   });
+  ipcMain.handle("custom-css:download-default", async () => {
+    const result = await dialog.showSaveDialog(windowRef, {
+      title: "Standard-CSS speichern",
+      defaultPath: path.join(app.getPath("downloads"), "mycel-standard.css"),
+      filters: [{ name: "CSS", extensions: ["css"] }],
+    });
+    if (result.canceled || !result.filePath) return false;
+    await fs.copyFile(path.join(__dirname, "styles.css"), result.filePath);
+    return true;
+  });
   ipcMain.handle("project:choose", async () => {
     const result = await dialog.showOpenDialog(windowRef, {
       properties: ["openDirectory", "createDirectory"],

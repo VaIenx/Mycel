@@ -4771,6 +4771,235 @@ select {
   background: var(--paper);
 }
 
+.character-graph {
+  margin: 0 0 22px;
+  padding: 16px 18px 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: rgba(252, 250, 241, 0.9);
+  box-shadow: var(--sh);
+}
+
+.character-graph-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.character-graph-heading h2 {
+  margin: 0;
+  font: italic 400 21px/1.2 var(--hd);
+}
+
+.character-graph-heading p,
+.character-graph-heading small {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.character-graph-scroll {
+  overflow: auto hidden;
+}
+
+.character-graph-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: none;
+}
+
+.character-graph-edge {
+  opacity: 1;
+  transition: opacity 140ms ease;
+}
+
+.character-graph-edge.is-dimmed {
+  opacity: 0.3;
+}
+
+.character-graph-edge line {
+  stroke: #91a28a;
+  stroke-width: 1.6;
+}
+
+.character-graph-edge marker path {
+  fill: var(--acc2);
+}
+
+.character-graph-relation-label {
+  fill: var(--muted);
+  stroke: var(--paper);
+  stroke-linejoin: round;
+  stroke-width: 4px;
+  paint-order: stroke;
+  font: 12px var(--ui);
+}
+
+.character-graph-node {
+  cursor: pointer;
+  outline: none;
+}
+
+.character-graph-node circle {
+  stroke: rgba(36, 58, 50, 0.42);
+  stroke-width: 1.5px;
+  transition: stroke 120ms ease, stroke-width 120ms ease;
+}
+
+.character-graph-node:hover circle,
+.character-graph-node:focus-visible circle {
+  stroke: var(--acc);
+  stroke-width: 3px;
+}
+
+.character-graph-initials,
+.character-graph-name {
+  pointer-events: none;
+}
+
+.character-graph-initials {
+  fill: var(--ink);
+  font: 700 14px var(--ui);
+}
+
+.character-graph-name {
+  fill: var(--ink);
+  font: 13px var(--ui);
+}
+
+.character-graph-empty {
+  margin: 16px 0 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.custom-css-settings .settings-section-heading {
+  margin-bottom: 12px;
+}
+
+.custom-css-toggle-row {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.custom-css-toggle-row > span {
+  display: grid;
+  gap: 4px;
+}
+
+.custom-css-toggle-row strong {
+  font-size: 14px;
+}
+
+.custom-css-toggle-row small,
+.custom-css-upload small,
+.custom-css-file-list small,
+.custom-css-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.custom-css-toggle-row input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  accent-color: var(--acc2);
+}
+
+.custom-css-controls {
+  display: grid;
+  gap: 16px;
+  padding-top: 16px;
+}
+
+.custom-css-upload {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+}
+
+.custom-css-active-control {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.4fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+}
+
+.custom-css-active-control select {
+  width: 100%;
+  min-width: 0;
+}
+
+.custom-css-file-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.custom-css-file-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.custom-css-file-list li > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-css-empty {
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .custom-css-toggle-row {
+    align-items: flex-start;
+    padding: 12px 0;
+  }
+
+  .custom-css-active-control {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .custom-css-file-list li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .custom-css-file-list li small {
+    display: none;
+  }
+}
+
+.relationship-graph-page .character-graph {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.relationship-graph-page .character-graph-heading h2 {
+  font: 32px/1.15 var(--serif);
+}
+
 .chapter-card h3,
 .character-card h3,
 .place-card h3,
@@ -4946,11 +5175,46 @@ select {
 }
 
 .rail-item {
+  position: relative;
   gap: 7px;
   padding: 9px 8px;
   border-radius: var(--r);
   color: var(--ink);
   font-size: 15px;
+}
+
+.chapter-drag-handle {
+  color: var(--muted);
+  cursor: grab;
+  user-select: none;
+}
+
+.chapter-drag-handle:active {
+  cursor: grabbing;
+}
+
+.rail-item.is-dragging {
+  opacity: 0.45;
+}
+
+.rail-item.drop-before::before,
+.rail-item.drop-after::after {
+  position: absolute;
+  right: 6px;
+  left: 6px;
+  z-index: 1;
+  height: 2px;
+  background: var(--acc);
+  content: "";
+  pointer-events: none;
+}
+
+.rail-item.drop-before::before {
+  top: -2px;
+}
+
+.rail-item.drop-after::after {
+  bottom: -2px;
 }
 
 .rail-item.active {

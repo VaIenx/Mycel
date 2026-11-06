@@ -1,4 +1,6 @@
 const api = window.mycel;
+const MAX_CUSTOM_CSS_FILES = 8;
+const MAX_CUSTOM_CSS_BYTES = 200 * 1024;
 const state = {
   project: null,
   recentProjects: [],
@@ -18,6 +20,7 @@ const state = {
     160,
     Math.max(50, Number(localStorage.getItem("mycel-timeline-zoom")) || 100),
   ),
+  draggedChapterId: null,
   editorMarksVisible: localStorage.getItem("mycel-editor-marks-visible") !== "false",
   writingMode: ["normal", "blinders", "typewriter"].includes(
     localStorage.getItem("mycel-writing-mode"),
@@ -52,14 +55,41 @@ function loadPreferences() {
       ),
     );
     delete saved.spacing;
+    const customCssFiles = Array.isArray(saved.customCssFiles)
+      ? saved.customCssFiles
+          .filter(
+            (file) =>
+              file &&
+              typeof file.id === "string" &&
+              typeof file.name === "string" &&
+              typeof file.content === "string" &&
+              new TextEncoder().encode(file.content).length <=
+                MAX_CUSTOM_CSS_BYTES,
+          )
+          .slice(0, MAX_CUSTOM_CSS_FILES)
+      : [];
     return {
       ...saved,
       font: saved.font || "sans",
       size: String(size),
       lineSpacing: String(lineSpacing),
+      customCssEnabled: saved.customCssEnabled === true,
+      customCssFiles,
+      activeCustomCssId: customCssFiles.some(
+        (file) => file.id === saved.activeCustomCssId,
+      )
+        ? saved.activeCustomCssId
+        : "",
     };
   } catch {
-    return { font: "sans", size: "16", lineSpacing: "27" };
+    return {
+      font: "sans",
+      size: "16",
+      lineSpacing: "27",
+      customCssEnabled: false,
+      customCssFiles: [],
+      activeCustomCssId: "",
+    };
   }
 }
 
@@ -72,6 +102,24 @@ function applyPreferences() {
     "--reading-line",
     `${state.preferences.lineSpacing}px`,
   );
+  applyCustomCss();
+}
+
+function applyCustomCss() {
+  const activeFile = state.preferences.customCssFiles.find(
+    (file) => file.id === state.preferences.activeCustomCssId,
+  );
+  let style = document.querySelector("#mycel-custom-css");
+  if (!state.preferences.customCssEnabled || !activeFile) {
+    style?.remove();
+    return;
+  }
+  if (!style) {
+    style = document.createElement("style");
+    style.id = "mycel-custom-css";
+    document.head.append(style);
+  }
+  style.textContent = activeFile.content;
 }
 
 function savePreferences() {
@@ -412,6 +460,91 @@ function renderSettings() {
           </div>
         </label>
       </section>
+      <section class="settings-section custom-css-settings">
+        <div class="settings-section-heading">
+          <h2>Custom CSS</h2>
+          <p>Verwende ein eigenes Stylesheet für Mycels Oberfläche.</p>
+        </div>
+        <label class="custom-css-toggle-row">
+          <span>
+            <strong>Custom CSS aktivieren</strong>
+            <small>Deaktivieren setzt deine Styles aus, löscht sie aber nicht.</small>
+          </span>
+          <input
+            id="custom-css-enabled"
+            type="checkbox"
+            ${preference.customCssEnabled ? "checked" : ""}
+          />
+        </label>
+        ${preference.customCssEnabled
+          ? html`<div class="custom-css-controls">
+              <button
+                type="button"
+                class="button"
+                data-action="download-default-css"
+              >
+                Standard-CSS herunterladen
+              </button>
+              <div class="custom-css-upload">
+                <button
+                  type="button"
+                  class="button primary"
+                  data-action="pick-custom-css"
+                >
+                  ＋ CSS-Dateien hinzufügen
+                </button>
+                <input
+                  id="custom-css-files"
+                  type="file"
+                  accept=".css,text/css"
+                  multiple
+                  hidden
+                />
+                <small>Bis zu ${MAX_CUSTOM_CSS_FILES} Dateien, je maximal 200 KB.</small>
+              </div>
+              <label class="custom-css-active-control">
+                <span>Aktives Stylesheet</span>
+                <select id="custom-css-active">
+                  <option value="">Kein eigenes CSS</option>
+                  ${(preference.customCssFiles || []).map(
+                    (file) =>
+                      html`<option
+                        value="${esc(file.id)}"
+                        ${file.id === preference.activeCustomCssId
+                          ? "selected"
+                          : ""}
+                      >
+                        ${esc(file.name)}
+                      </option>`,
+                  )}
+                </select>
+              </label>
+              ${preference.customCssFiles.length
+                ? html`<ul class="custom-css-file-list">
+                    ${preference.customCssFiles
+                      .map(
+                        (file) => html`<li>
+                          <span>${esc(file.name)}</span>
+                          <small>${Math.ceil(
+                            new TextEncoder().encode(file.content).length / 1024,
+                          )} KB</small>
+                          <button
+                            type="button"
+                            class="button small subtle"
+                            data-remove-custom-css="${esc(file.id)}"
+                          >
+                            Entfernen
+                          </button>
+                        </li>`,
+                      )
+                      .join("")}
+                  </ul>`
+                : html`<p class="custom-css-empty">
+                    Noch keine CSS-Dateien hinzugefügt.
+                  </p>`}
+            </div>`
+          : ""}
+      </section>
       <section class="settings-section settings-preview">
         <span class="settings-preview-label">Vorschau</span>
         <p>
@@ -580,7 +713,7 @@ function chapterCard(ch, index) {
     <div class="card-foot">
       ${ch.target
         ? `Ziel: ${format(ch.target)} Wörter`
-        : "Manuskriptkapitel"}<span
+        : ""}<span
         >Zuletzt bearbeitet ·
         ${ch.updated
           ? new Date(ch.updated).toLocaleDateString("de-DE")
@@ -713,12 +846,210 @@ function characterCard(ch) {
   </article>`;
 }
 
+function characterRelationshipGraph(characters) {
+  const charactersById = new Map(
+    characters.map((character) => [character.id, character]),
+  );
+  const pairs = new Map();
+  for (const source of characters) {
+    for (const relation of source.relationships || []) {
+      const target = charactersById.get(relation.target);
+      if (!target || target.id === source.id) continue;
+      const sourceIsFirst = source.id.localeCompare(target.id, "de") < 0;
+      const first = sourceIsFirst ? source : target;
+      const second = sourceIsFirst ? target : source;
+      const key = `${first.id}\u0000${second.id}`;
+      const pair = pairs.get(key) || {
+        first,
+        second,
+        firstToSecond: false,
+        secondToFirst: false,
+        bidirectional: false,
+        origins: new Set(),
+        types: new Set(),
+      };
+      pair.origins.add(source.id);
+      if (relation.bidirectional) {
+        pair.bidirectional = true;
+        pair.origins.add(target.id);
+      }
+      else if (sourceIsFirst) pair.firstToSecond = true;
+      else pair.secondToFirst = true;
+      pair.types.add(relation.type || "Beziehung");
+      pairs.set(key, pair);
+    }
+  }
+
+  const edges = [...pairs.values()];
+  const radius =
+    characters.length > 1
+      ? Math.max(140, (characters.length * 100) / (2 * Math.PI))
+      : 0;
+  const width = Math.max(720, Math.ceil(radius * 2 + 180));
+  const height = Math.max(320, Math.ceil(radius * 2 + 120));
+  const center = { x: width / 2, y: height / 2 };
+  const positions = new Map(
+    characters.map((character, index) => {
+      const angle =
+        characters.length === 1
+          ? 0
+          : -Math.PI / 2 + (index * 2 * Math.PI) / characters.length;
+      return [
+        character.id,
+        {
+          x: center.x + radius * Math.cos(angle),
+          y: center.y + radius * Math.sin(angle),
+        },
+      ];
+    }),
+  );
+  const labelWidth = Math.max(
+    54,
+    Math.min(140, (2 * Math.PI * Math.max(radius, 1) * 0.8) / characters.length),
+  );
+  const initials = (character) =>
+    String(character.name || character.id)
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase();
+
+  return html`<section class="character-graph" aria-labelledby="character-graph-title">
+    <div class="character-graph-heading">
+      <div>
+        <h2 id="character-graph-title">Beziehungsnetz</h2>
+        <p>${characters.length} Figuren · ${edges.length} Verbindungen</p>
+      </div>
+      <small>Figurenknoten öffnen den Wiki-Eintrag</small>
+    </div>
+    ${edges.length
+      ? html`<div class="character-graph-scroll">
+          <svg
+            class="character-graph-svg"
+            viewBox="0 0 ${width} ${height}"
+            width="${width}"
+            height="${height}"
+            role="group"
+            aria-label="Automatisches Beziehungsnetz der Figuren"
+            style="min-width:${width}px"
+          >
+            <defs>
+              <marker
+                id="character-graph-arrow"
+                markerWidth="8"
+                markerHeight="8"
+                refX="6"
+                refY="4"
+                orient="auto-start-reverse"
+              >
+                <path d="M0 0L8 4L0 8z" />
+              </marker>
+            </defs>
+            <g class="character-graph-edges">
+              ${edges
+                .map((edge) => {
+                  const start = positions.get(edge.first.id);
+                  const end = positions.get(edge.second.id);
+                  const dx = end.x - start.x;
+                  const dy = end.y - start.y;
+                  const distance = Math.hypot(dx, dy) || 1;
+                  const startX = start.x + (dx / distance) * 30;
+                  const startY = start.y + (dy / distance) * 30;
+                  const endX = end.x - (dx / distance) * 30;
+                  const endY = end.y - (dy / distance) * 30;
+                  const hasBothDirections =
+                    edge.bidirectional ||
+                    (edge.firstToSecond && edge.secondToFirst);
+                  const markerStart = hasBothDirections || edge.secondToFirst;
+                  const markerEnd = hasBothDirections || edge.firstToSecond;
+                  const types = [...edge.types].join(" · ");
+                  const direction = hasBothDirections
+                    ? `${edge.first.name || edge.first.id} ↔ ${edge.second.name || edge.second.id}`
+                    : markerEnd
+                      ? `${edge.first.name || edge.first.id} → ${edge.second.name || edge.second.id}`
+                      : `${edge.second.name || edge.second.id} → ${edge.first.name || edge.first.id}`;
+                  return html`<g
+                    class="character-graph-edge"
+                    data-graph-origins="${esc([...edge.origins].join('|'))}"
+                  >
+                    <title>${esc(
+                      `${direction}: ${types}`,
+                    )}</title>
+                    <line
+                      x1="${startX}"
+                      y1="${startY}"
+                      x2="${endX}"
+                      y2="${endY}"
+                      ${markerStart ? 'marker-start="url(#character-graph-arrow)"' : ""}
+                      ${markerEnd ? 'marker-end="url(#character-graph-arrow)"' : ""}
+                    />
+                    ${edges.length <= 8
+                      ? html`<text
+                          class="character-graph-relation-label"
+                          x="${(start.x + end.x) / 2}"
+                          y="${(start.y + end.y) / 2 - 7}"
+                          text-anchor="middle"
+                        >${esc(types)}</text>`
+                      : ""}
+                  </g>`;
+                })
+                .join("")}
+            </g>
+            <g class="character-graph-nodes">
+              ${characters
+                .map((character) => {
+                  const point = positions.get(character.id);
+                  const name = character.name || character.id;
+                  return html`<g
+                    class="character-graph-node"
+                    data-wiki-open="character|${esc(character.id)}"
+                    data-graph-character="${esc(character.id)}"
+                    role="button"
+                    tabindex="0"
+                    aria-label="Wiki-Eintrag öffnen: ${esc(name)}"
+                  >
+                    <title>${esc(name)} · ${esc(character.role || "Nebenfigur")}</title>
+                    <circle
+                      cx="${point.x}"
+                      cy="${point.y}"
+                      r="27"
+                      fill="${characterColor(character, characters)}"
+                    />
+                    <text
+                      class="character-graph-initials"
+                      x="${point.x}"
+                      y="${point.y + 5}"
+                      text-anchor="middle"
+                    >${esc(initials(character))}</text>
+                    <text
+                      class="character-graph-name"
+                      x="${point.x}"
+                      y="${point.y + 48}"
+                      text-anchor="middle"
+                      textLength="${Math.min(labelWidth, Math.max(54, name.length * 8))}"
+                      lengthAdjust="spacingAndGlyphs"
+                    >${esc(name)}</text>
+                  </g>`;
+                })
+                .join("")}
+            </g>
+          </svg>
+        </div>`
+      : html`<p class="character-graph-empty">
+          ${characters.length
+            ? "Noch keine Beziehungen angelegt. Verknüpfe Figuren in ihren Profilen, dann erscheint das Beziehungsnetz hier automatisch."
+            : "Noch keine Figuren angelegt. Erstelle Figurenprofile, um hier ihr Beziehungsnetz zu sehen."}
+        </p>`}
+  </section>`;
+}
+
 function renderCharacters() {
   const list = state.project.characters;
   return html`${heading(
       "Charaktere",
-      html`<button class="button" data-action="relationship-info">
-          ♧ &nbsp; Figuren verknüpfen</button
+      html`<button class="button" data-wiki-open="relationships">
+          ♧ &nbsp; Beziehungsnetz</button
         ><button class="button primary" data-action="new-character">
           ＋ Figur
         </button>`,
@@ -2085,9 +2416,21 @@ function renderWiki() {
       ${groups
         .map(([kind, label]) => {
           const entries = articles.filter((article) => article.kind === kind);
-          return entries.length
+          return entries.length || kind === "character"
             ? html`<section data-wiki-group="${kind}">
                 <h2>${label}</h2>
+                ${kind === "character"
+                  ? html`<button
+                      class="wiki-index-entry ${state.wikiArticle === "relationships"
+                        ? "active"
+                        : ""}"
+                      data-wiki-open="relationships"
+                      data-wiki-kind="character"
+                      data-wiki-title="beziehungsnetz figuren verknüpfungen"
+                    >
+                      Beziehungsnetz
+                    </button>`
+                  : ""}
                 ${entries
                   .map(
                     (article) =>
@@ -2115,6 +2458,13 @@ function renderWiki() {
       <p class="wiki-index-empty" hidden>Keine passenden Einträge.</p>
     </div>
   </aside>`;
+  if (state.wikiArticle === "relationships")
+    return html`<div class="wiki-layout">
+      ${sidebar}
+      <main class="wiki-article relationship-graph-page">
+        ${characterRelationshipGraph(state.project?.characters || [])}
+      </main>
+    </div>`;
   if (selected && state.wikiEditing)
     return html`<div class="wiki-layout">
       ${sidebar}${wikiEditor(selected)}
@@ -2461,7 +2811,14 @@ function renderWriting() {
                 data-action="write-chapter"
                 data-id="${esc(ch.id)}"
               >
-                <span>⠿</span><span>${i + 1}.</span
+                <span
+                  class="chapter-drag-handle"
+                  draggable="true"
+                  data-drag-chapter="${esc(ch.id)}"
+                  aria-label="Kapitel verschieben"
+                  title="Ziehen, um die Reihenfolge zu ändern"
+                  >⠿</span
+                ><span>${i + 1}.</span
                 ><span class="rail-title-wrap">
                   <span class="rail-title">${esc(ch.title || ch.id)}</span>
                   ${ch.pov
@@ -2598,6 +2955,45 @@ function renderWriting() {
       </div>
     </section>
   </div>`;
+}
+
+async function reorderChapters(sourceId, targetId, placeAfter) {
+  if (!state.project || sourceId === targetId) return;
+  const original = [...state.project.chapters].sort(
+    (a, b) => (a.order ?? 9999) - (b.order ?? 9999),
+  );
+  const originalIds = original.map((chapter) => chapter.id);
+  const sourceIndex = original.findIndex((chapter) => chapter.id === sourceId);
+  const targetIndex = original.findIndex((chapter) => chapter.id === targetId);
+  if (sourceIndex < 0 || targetIndex < 0) return;
+
+  const [moved] = original.splice(sourceIndex, 1);
+  let insertionIndex = targetIndex + Number(placeAfter);
+  if (sourceIndex < insertionIndex) insertionIndex--;
+  original.splice(insertionIndex, 0, moved);
+  if (original.every((chapter, index) => chapter.id === originalIds[index]))
+    return;
+
+  try {
+    clearTimeout(state.saveTimer);
+    await saveCurrentChapter();
+    const reordered = original.map((chapter, index) => ({
+      ...state.project.chapters.find((item) => item.id === chapter.id),
+      order: index + 1,
+    }));
+    for (const chapter of reordered) {
+      const saved = await api.saveChapter(chapter);
+      chapter.id = saved.id;
+      chapter.file = saved.file;
+    }
+    state.project.chapters = reordered;
+    render();
+    toast("Kapitelreihenfolge gespeichert.");
+  } catch {
+    state.project = await api.currentProject();
+    render();
+    toast("Kapitelreihenfolge konnte nicht gespeichert werden.");
+  }
 }
 
 function renderProgress() {
@@ -3263,6 +3659,79 @@ function render() {
         updatePreference,
       );
     });
+    page.querySelector("#custom-css-enabled")?.addEventListener("change", (event) => {
+      state.preferences.customCssEnabled = event.currentTarget.checked;
+      savePreferences();
+      render();
+    });
+    page
+      .querySelector('[data-action="download-default-css"]')
+      ?.addEventListener("click", async () => {
+        try {
+          const saved = await api.downloadDefaultCss();
+          if (saved) toast("Standard-CSS gespeichert.");
+        } catch {
+          toast("Standard-CSS konnte nicht gespeichert werden.");
+        }
+      });
+    page
+      .querySelector('[data-action="pick-custom-css"]')
+      ?.addEventListener("click", () => page.querySelector("#custom-css-files").click());
+    page.querySelector("#custom-css-active")?.addEventListener("change", (event) => {
+      state.preferences.activeCustomCssId = event.currentTarget.value;
+      savePreferences();
+    });
+    page.querySelectorAll("[data-remove-custom-css]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const removedId = button.dataset.removeCustomCss;
+        state.preferences.customCssFiles = state.preferences.customCssFiles.filter(
+          (file) => file.id !== removedId,
+        );
+        if (state.preferences.activeCustomCssId === removedId)
+          state.preferences.activeCustomCssId = "";
+        savePreferences();
+        render();
+        toast("CSS-Datei entfernt.");
+      });
+    });
+    page.querySelector("#custom-css-files")?.addEventListener("change", async (event) => {
+      const fileInput = event.currentTarget;
+      const selectedFiles = [...fileInput.files];
+      const existingFiles = state.preferences.customCssFiles || [];
+      const newFiles = [];
+      let rejectedCount = 0;
+      for (const file of selectedFiles) {
+        if (!/\.css$/i.test(file.name) || file.size > MAX_CUSTOM_CSS_BYTES) {
+          rejectedCount++;
+          continue;
+        }
+        if (existingFiles.length + newFiles.length >= MAX_CUSTOM_CSS_FILES) {
+          rejectedCount++;
+          continue;
+        }
+        const content = await file.text();
+        if (new TextEncoder().encode(content).length > MAX_CUSTOM_CSS_BYTES) {
+          rejectedCount++;
+          continue;
+        }
+        newFiles.push({
+          id: `css-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          name: file.name,
+          content,
+        });
+      }
+      fileInput.value = "";
+      if (newFiles.length) {
+        state.preferences.customCssFiles = [...existingFiles, ...newFiles];
+        if (!state.preferences.activeCustomCssId)
+          state.preferences.activeCustomCssId = newFiles[0].id;
+        savePreferences();
+        render();
+        toast(`${newFiles.length} CSS-Datei(en) hinzugefügt.`);
+      }
+      if (rejectedCount)
+        toast(`${rejectedCount} Datei(en) übersprungen (CSS, max. 200 KB, höchstens ${MAX_CUSTOM_CSS_FILES}).`);
+    });
     page
       .querySelector("[data-action=reset-preferences]")
       .addEventListener("click", () => {
@@ -3270,6 +3739,9 @@ function render() {
           font: "sans",
           size: "16",
           lineSpacing: "27",
+          customCssEnabled: false,
+          customCssFiles: [],
+          activeCustomCssId: "",
         };
         savePreferences();
         render();
@@ -3279,7 +3751,7 @@ function render() {
   if (state.page === "characters") {
     const search = page.querySelector("#character-search");
     const filter = page.querySelector("#role-filter");
-    const apply = () =>
+    const apply = () => {
       page.querySelectorAll(".character-card").forEach((card) => {
         const ch = state.project.characters.find(
           (item) => item.id === card.dataset.id,
@@ -3293,6 +3765,7 @@ function render() {
           (filter.value !== "all" &&
             (ch.role || "Nebenfigur") !== filter.value);
       });
+    };
     search?.addEventListener("input", apply);
     filter?.addEventListener("change", apply);
   }
@@ -4443,45 +4916,6 @@ function openSearchResult(kind, id, matchIndex = null) {
   openEntity(kind, id);
 }
 
-function openRelationshipMap() {
-  const characters = state.project.characters;
-  const relations = [];
-  const seen = new Set();
-  for (const source of characters)
-    for (const relation of source.relationships || []) {
-      const target = characters.find((item) => item.id === relation.target);
-      if (!target) continue;
-      const key = [source.id, target.id].sort().join("::");
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const reciprocal = (target.relationships || []).some(
-        (item) => item.target === source.id,
-      );
-      relations.push(
-        html`<div class="relationship-map-row">
-          <span>${esc(source.name)}</span
-          ><b>${relation.bidirectional || reciprocal ? "↔" : "→"}</b
-          ><span>${esc(target.name)}</span><small>${esc(relation.type)}</small>
-        </div>`,
-      );
-    }
-  openDialog(
-    "Beziehungsübersicht",
-    html`<p class="quiet">Verbindungen deiner Figuren im Überblick.</p>
-      <div class="relationship-map">
-        ${relations.length
-          ? relations.join("")
-          : html`<div class="empty-state">
-              <strong>Noch keine Verbindungen</strong
-              ><span>Füge Beziehungen in den Figurenprofilen hinzu.</span>
-            </div>`}
-      </div>`,
-    async () => {},
-    "Fertig",
-  );
-  dialog.querySelector("[data-cancel]").textContent = "Schließen";
-}
-
 function createProject() {
   openDialog(
     "Neues Schreibprojekt",
@@ -4819,6 +5253,10 @@ document.addEventListener("click", async (event) => {
       return;
     }
     state.wikiArticle = wikiLink.dataset.wikiOpen;
+    if (state.wikiArticle === "relationships") {
+      state.wikiSearch = "";
+      state.wikiCategory = "all";
+    }
     if (state.page !== "wiki") state.page = "wiki";
     render();
     return;
@@ -5025,8 +5463,7 @@ document.addEventListener("click", async (event) => {
       button.dataset.id,
       dialog.open && dialog.contains(button),
     );
-  } else if (action === "relationship-info") openRelationshipMap();
-  else if (action === "save-goal") {
+  } else if (action === "save-goal") {
     state.project = await api.saveSettings({
       goal: document.querySelector("#goal-input").value,
     });
@@ -5327,6 +5764,94 @@ document.querySelectorAll("[data-window-control]").forEach((button) => {
   button.addEventListener("click", () =>
     api.controlWindow(button.dataset.windowControl),
   );
+});
+page.addEventListener("click", (event) => {
+  if (event.target.closest(".chapter-drag-handle")) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+});
+page.addEventListener("dragstart", (event) => {
+  const handle = event.target.closest("[data-drag-chapter]");
+  if (!handle) return;
+  state.draggedChapterId = handle.dataset.dragChapter;
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", state.draggedChapterId);
+  handle.closest(".rail-item")?.classList.add("is-dragging");
+});
+page.addEventListener("dragover", (event) => {
+  const target = event.target.closest(".rail-item[data-id]");
+  if (!target || !state.draggedChapterId) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  page
+    .querySelectorAll(".rail-item")
+    .forEach((item) => item.classList.remove("drop-before", "drop-after"));
+  if (target.dataset.id === state.draggedChapterId) return;
+  const midpoint = target.getBoundingClientRect().top + target.offsetHeight / 2;
+  target.classList.add(event.clientY < midpoint ? "drop-before" : "drop-after");
+});
+page.addEventListener("drop", (event) => {
+  const target = event.target.closest(".rail-item[data-id]");
+  if (!target || !state.draggedChapterId) return;
+  event.preventDefault();
+  const midpoint = target.getBoundingClientRect().top + target.offsetHeight / 2;
+  void reorderChapters(
+    state.draggedChapterId,
+    target.dataset.id,
+    event.clientY >= midpoint,
+  );
+});
+page.addEventListener("dragend", () => {
+  state.draggedChapterId = null;
+  page.querySelectorAll(".rail-item").forEach((item) => {
+    item.classList.remove("is-dragging", "drop-before", "drop-after");
+  });
+});
+const setRelationshipHover = (graph, characterId) => {
+  graph.querySelectorAll(".character-graph-edge").forEach((edge) => {
+    const origins = edge.dataset.graphOrigins.split("|");
+    edge.classList.toggle("is-dimmed", !origins.includes(characterId));
+  });
+};
+const clearRelationshipHover = (graph) => {
+  graph
+    .querySelectorAll(".character-graph-edge.is-dimmed")
+    .forEach((edge) => edge.classList.remove("is-dimmed"));
+};
+page.addEventListener("pointerover", (event) => {
+  const node = event.target.closest(".character-graph-node");
+  if (!node) return;
+  setRelationshipHover(node.closest(".character-graph"), node.dataset.graphCharacter);
+});
+page.addEventListener("pointerout", (event) => {
+  const node = event.target.closest(".character-graph-node");
+  if (!node) return;
+  const graph = node.closest(".character-graph");
+  const nextNode = event.relatedTarget?.closest?.(".character-graph-node");
+  if (nextNode && nextNode.closest(".character-graph") === graph)
+    setRelationshipHover(graph, nextNode.dataset.graphCharacter);
+  else clearRelationshipHover(graph);
+});
+page.addEventListener("keydown", (event) => {
+  const node = event.target.closest(".character-graph-node");
+  if (!node || (event.key !== "Enter" && event.key !== " ")) return;
+  event.preventDefault();
+  node.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+});
+page.addEventListener("focusin", (event) => {
+  const node = event.target.closest(".character-graph-node");
+  if (node)
+    setRelationshipHover(node.closest(".character-graph"), node.dataset.graphCharacter);
+});
+page.addEventListener("focusout", (event) => {
+  const node = event.target.closest(".character-graph-node");
+  if (!node) return;
+  const graph = node.closest(".character-graph");
+  const nextNode = event.relatedTarget?.closest?.(".character-graph-node");
+  if (nextNode && nextNode.closest(".character-graph") === graph)
+    setRelationshipHover(graph, nextNode.dataset.graphCharacter);
+  else clearRelationshipHover(graph);
 });
 applyPreferences();
 void Promise.all([api.currentProject(), api.recentProjects()]).then(

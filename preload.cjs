@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("mycel", {
   controlWindow: (action) => ipcRenderer.send("window:control", action),
+  downloadDefaultCss: () => ipcRenderer.invoke("custom-css:download-default"),
   chooseProject: () => ipcRenderer.invoke("project:choose"),
   createProject: (name) => ipcRenderer.invoke("project:create", name),
   currentProject: () => ipcRenderer.invoke("project:current"),

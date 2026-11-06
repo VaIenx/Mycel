@@ -149,7 +149,7 @@ Mycel works with local folders and needs no account. It never uploads your manus
 - [ ] Scene planning with point of view, purpose, and short summary
 - [ ] Chapter snapshots to compare and restore earlier drafts
 - [x] Export to DOCX, PDF, and EPUB with configurable formatting
-- [ ] Reorder chapters and scenes directly in the outline
+- [X] Reorder chapters and scenes directly in the outline
 - [ ] Project backups with a simple restore flow
 
 ## Development
