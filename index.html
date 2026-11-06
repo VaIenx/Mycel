@@ -10,9 +10,20 @@
   <body>
     <div id="app" class="app-shell">
       <aside class="app-sidebar">
+        <svg
+          class="sidebar-deco web"
+          viewBox="0 0 240 360"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <path d="M0 360C40 310 60 280 110 260S190 210 240 120" />
+          <path d="M110 260C100 220 130 190 120 130" />
+          <path d="M60 310C90 320 140 310 170 330S220 320 240 280" />
+          <path d="M0 230C30 220 50 190 90 195" />
+        </svg>
         <button class="brand" data-page="wiki" aria-label="Enzyklopädie öffnen">
           <span class="brand-name">Mycel</span>
-          <small>Klicken für Enzyklopädie</small>
+          <small>eine Schreibsuite</small>
         </button>
         <nav class="primary-nav" aria-label="Hauptnavigation">
           <div class="nav-group">
@@ -58,6 +69,9 @@
 
       <div class="workspace">
         <header class="topbar">
+          <div id="project-summary" class="project-summary" aria-live="polite">
+            <strong>Mycel</strong><small>Schreibsuite</small>
+          </div>
           <div class="top-actions">
             <button
               id="project-search-open"
@@ -82,6 +96,11 @@
             >
               ＋ <span>Neues Projekt</span>
             </button>
+          </div>
+          <div class="window-controls" aria-label="Fenstersteuerung">
+            <button type="button" data-window-control="minimize" aria-label="Minimieren" title="Minimieren">−</button>
+            <button type="button" data-window-control="toggle-maximize" aria-label="Maximieren oder wiederherstellen" title="Maximieren oder wiederherstellen">□</button>
+            <button type="button" data-window-control="close" aria-label="Schließen" title="Schließen">×</button>
           </div>
         </header>
 

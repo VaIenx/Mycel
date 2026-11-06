@@ -918,6 +918,15 @@ async function chooseProjectImage(folder) {
 }
 
 function registerIpc() {
+  ipcMain.on("window:control", (event, action) => {
+    const target = BrowserWindow.fromWebContents(event.sender);
+    if (!target) return;
+    if (action === "minimize") target.minimize();
+    else if (action === "toggle-maximize") {
+      if (target.isMaximized()) target.unmaximize();
+      else target.maximize();
+    } else if (action === "close") target.close();
+  });
   ipcMain.handle("project:choose", async () => {
     const result = await dialog.showOpenDialog(windowRef, {
       properties: ["openDirectory", "createDirectory"],
@@ -1467,6 +1476,7 @@ function createWindow() {
     height: 980,
     minWidth: 960,
     minHeight: 650,
+    frame: false,
     backgroundColor: "#dfe7df",
     icon: path.join(__dirname, "mycel.png"),
     title: "Mycel",

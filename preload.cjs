@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("mycel", {
+  controlWindow: (action) => ipcRenderer.send("window:control", action),
   chooseProject: () => ipcRenderer.invoke("project:choose"),
   createProject: (name) => ipcRenderer.invoke("project:create", name),
   currentProject: () => ipcRenderer.invoke("project:current"),

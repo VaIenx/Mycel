@@ -3242,24 +3242,17 @@ body::before {
   display: flex;
   width: 100%;
   min-height: 42px;
-  align-items: center;
   gap: 12px;
   padding: 9px 12px;
   border: 0;
   border-radius: 9px;
   background: transparent;
   color: #d6dfd6;
-  font-size: 14px;
+  font-size: 15px;
   text-align: left;
   transition:
     background 140ms ease,
     color 140ms ease;
-}
-
-.sidebar-link {
-  height: auto;
-  border: 0;
-  box-shadow: none;
 }
 
 .primary-nav button span,
@@ -4181,5 +4174,1328 @@ body::before {
   .question-card-actions {
     min-width: 0;
     justify-content: flex-start;
+  }
+}
+
+:root {
+  --bg: #dde4d2;
+  --panel: #f3f5e9;
+  --ink: #243a32;
+  --muted: #6b8074;
+  --line: rgba(48, 73, 60, 0.18);
+  --paper: #fcfaf1;
+  --paper2: #f3f5e9;
+  --acc: #c9684a;
+  --acc2: #6f9460;
+  --accent: var(--acc);
+  --accent-green: var(--acc2);
+  --tint: #cfdcc2;
+  --sb: linear-gradient(180deg, #18251e, #0f1914);
+  --sbi: #cfdcc2;
+  --sbon: rgba(111, 148, 96, 0.28);
+  --sbonc: #fff;
+  --ui: "Segoe UI", system-ui, sans-serif;
+  --tx: Georgia, serif;
+  --serif: Georgia, serif;
+  --hd: Georgia, serif;
+  --hs: italic;
+  --hw: 400;
+  --r: 10px;
+  --sh: 0 14px 26px -16px rgba(24, 37, 30, 0.5);
+  --c1: #d9e8ff;
+  --c2: #f8d9df;
+  --c3: #f6e8b8;
+  --c4: #d8ecd8;
+  font: 15px var(--ui);
+  color: var(--ink);
+  background: var(--bg);
+}
+
+body {
+  min-width: 0;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+body::before {
+  display: none;
+}
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 0;
+  height: 100vh;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.app-sidebar {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  height: 100vh;
+  flex-direction: column;
+  padding: 22px 14px 14px;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  background: var(--sb);
+  color: var(--sbi);
+  box-shadow: none;
+}
+
+.sidebar-deco {
+  position: absolute;
+  z-index: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+}
+
+.web {
+  height: 360px;
+  fill: none;
+  stroke: var(--acc2);
+  opacity: 0.35;
+}
+
+.brand {
+  position: relative;
+  z-index: 1;
+  align-items: flex-start;
+  margin: 0 0 20px;
+  padding: 0 10px 18px;
+  color: inherit;
+  text-align: left;
+}
+
+.brand-name {
+  font: italic 400 34px/1 var(--serif);
+  letter-spacing: 0;
+}
+
+.brand small {
+  margin-top: 0;
+  color: inherit;
+  font-size: 13px;
+  opacity: 0.72;
+}
+
+.primary-nav {
+  position: relative;
+  z-index: 1;
+  display: block;
+  min-height: 0;
+  overflow: auto;
+}
+
+.nav-group {
+  margin-bottom: 16px;
+}
+
+.nav-group-label {
+  display: block;
+  padding: 0 12px 5px;
+  color: inherit;
+  font-size: 12.5px;
+  font-style: italic;
+  opacity: 0.65;
+}
+
+.primary-nav button,
+.sidebar-link {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--r);
+  background: transparent;
+  color: inherit;
+  font-size: 15px;
+  text-align: left;
+}
+
+.primary-nav button span {
+  display: inline-grid;
+  width: 18px;
+  flex: 0 0 18px;
+  place-items: center;
+  margin: 0;
+  color: #a4bc91;
+}
+
+.primary-nav button:hover,
+.primary-nav button.active,
+.sidebar-link:hover,
+.sidebar-link.active {
+  background: var(--sbon);
+  color: var(--sbonc);
+}
+
+.primary-nav button.active span {
+  color: #fff;
+}
+
+.stacked-books-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.sidebar-footer {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.sidebar-link {
+  padding: 10px 12px;
+  border-top: 1px solid currentColor;
+  border-radius: 0;
+}
+
+.workspace {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  background: #dde4d2;
+  border-radius: 0;
+}
+
+.topbar {
+  display: flex;
+  height: auto;
+  min-height: 0;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 22px;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  box-shadow: none;
+  -webkit-app-region: drag;
+}
+
+.mycelium-screen,
+.welcome-screen {
+  position: relative;
+  min-height: 100%;
+  isolation: isolate;
+}
+
+.welcome-screen {
+  display: flow-root;
+}
+
+.mycelium-backdrop {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  color: var(--acc2);
+  opacity: 0.19;
+  pointer-events: none;
+}
+
+.mycelium-backdrop g {
+  stroke-width: 2.2;
+}
+
+.welcome {
+  position: relative;
+  overflow: hidden;
+  background: rgba(252, 250, 241, 0.86);
+}
+
+.topbar button,
+.project-summary {
+  -webkit-app-region: no-drag;
+}
+
+.project-summary {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  margin-right: auto;
+}
+
+.project-summary strong {
+  overflow: hidden;
+  font: italic 18px var(--hd);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-summary small {
+  margin-left: 10px;
+  overflow: hidden;
+  color: var(--muted);
+  font: 13px var(--ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-actions {
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.window-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  -webkit-app-region: no-drag;
+}
+
+.window-controls button {
+  display: grid;
+  width: 32px;
+  height: 30px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font: 18px/1 var(--ui);
+}
+
+.window-controls button:hover {
+  background: var(--tint);
+  color: var(--ink);
+}
+
+.window-controls [data-window-control="close"]:hover {
+  background: #c9684a;
+  color: #fff;
+}
+
+.toolbar-action {
+  min-height: 34px;
+  padding: 7px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.toolbar-action:hover {
+  border-color: var(--accent);
+  background: var(--paper2);
+}
+
+.toolbar-action-primary {
+  border-color: var(--accent-green);
+  background: var(--accent-green);
+  color: #fff;
+}
+
+.toolbar-action-primary:hover {
+  border-color: #587d4d;
+  background: #587d4d;
+}
+
+.page {
+  width: 100%;
+  max-width: none;
+  height: auto;
+  min-height: 0;
+  flex: 1;
+  margin: 0;
+  padding: 28px 34px;
+  overflow: auto;
+}
+
+.page:has(.editor-layout) {
+  padding: 0;
+  overflow: hidden;
+}
+
+.page-heading {
+  margin: 0 0 22px;
+}
+
+.page-heading h1,
+.welcome h1 {
+  color: var(--ink);
+  font: italic 400 32px/1.15 var(--serif);
+  letter-spacing: 0;
+}
+
+.page-heading h1 {
+  margin: 0 0 4px;
+}
+
+.page-heading p,
+.welcome > p {
+  color: var(--muted);
+}
+
+.eyebrow {
+  color: var(--accent);
+  letter-spacing: 0.6px;
+}
+
+.button,
+.select-like,
+.search,
+input,
+textarea,
+select {
+  border-color: var(--line);
+  border-radius: var(--r);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.button {
+  padding: 7px 13px;
+}
+
+.button:hover {
+  border-color: var(--accent);
+  background: var(--tint);
+}
+
+.button.primary,
+.role-chip {
+  border-color: var(--accent-green);
+  background: var(--accent-green);
+  color: #fff;
+}
+
+.button.primary:hover {
+  border-color: #587d4d;
+  background: #587d4d;
+}
+
+.panel,
+.stat-card,
+.empty-state,
+.welcome,
+.chapter-card,
+.character-card,
+.place-card,
+.knowledge-card,
+.relationship-map,
+.chart,
+.question-card,
+.timeline-event-card,
+.wiki-article,
+.wiki-welcome,
+.wiki-editor,
+.wiki-sidebar,
+.wiki-edit-panel,
+.wiki-edit-properties,
+.dialog,
+.editor-wrap,
+.chapter-rail {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--sh);
+}
+
+.panel,
+.stat-card,
+.empty-state,
+.chapter-card,
+.character-card,
+.place-card,
+.knowledge-card,
+.editor-wrap {
+  background: var(--paper);
+}
+
+.chapter-rail,
+.wiki-sidebar,
+.wiki-edit-panel,
+.wiki-edit-properties {
+  background: var(--paper2);
+}
+
+.overview-grid {
+  gap: 16px;
+}
+
+.panel,
+.stat-card {
+  padding: 20px;
+}
+
+.daily-big,
+.stat-value,
+.manuscript-stats strong {
+  color: var(--ink);
+  font-family: var(--serif);
+}
+
+.daily-big {
+  font-size: 46px;
+}
+
+.overview-grid .panel:first-child {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.overview-grid .panel:first-child .daily-big,
+.overview-grid .panel:first-child .quiet,
+.overview-grid .panel:first-child .small-note {
+  color: var(--paper);
+}
+
+.overview-grid .panel:first-child .progress-bar {
+  background: rgba(252, 250, 241, 0.28);
+}
+
+.overview-grid .panel:first-child .progress-bar i {
+  background: var(--acc2);
+}
+
+.progress-bar {
+  background: #dce5d2;
+}
+
+.progress-bar i,
+.chart-bar {
+  background: var(--accent-green);
+}
+
+.section-title,
+.wiki-sidebar-title,
+.wiki-article > h1,
+.wiki-welcome h1,
+.dialog-content h2 {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-weight: 400;
+}
+
+.recent-row {
+  color: var(--ink);
+}
+
+.recent-row:hover {
+  background: rgba(207, 220, 194, 0.45);
+}
+
+.tabs {
+  border-color: var(--line);
+}
+
+.tab.active {
+  border-bottom-color: var(--accent);
+  color: var(--ink);
+}
+
+.filterbar,
+.place-tools,
+.knowledge-tools {
+  gap: 8px;
+}
+
+.search {
+  border-color: var(--line);
+}
+
+.view-toggle,
+.place-tabs {
+  border-color: var(--line);
+  border-radius: 6px;
+  background: var(--paper2);
+}
+
+.view-toggle button,
+.place-tabs button {
+  background: transparent;
+}
+
+.view-toggle button.active,
+.place-tabs button.active {
+  border-color: var(--line);
+  background: var(--tint);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.chapter-card,
+.character-card,
+.place-card,
+.knowledge-card {
+  color: var(--ink);
+  border-radius: var(--r);
+  box-shadow: var(--sh);
+}
+
+.chapter-card:hover,
+.character-card:hover,
+.place-card:hover,
+.knowledge-card:hover {
+  border-color: rgba(201, 104, 74, 0.55);
+  background-color: var(--paper2);
+  box-shadow: var(--sh);
+  transform: translateY(-2px);
+}
+
+.chapter-card {
+  min-height: 250px;
+  padding: 18px 18px 14px;
+  background: var(--paper);
+}
+
+.character-card,
+.place-card,
+.knowledge-card {
+  background: var(--paper);
+}
+
+.chapter-card h3,
+.character-card h3,
+.place-card h3,
+.knowledge-card h3,
+.timeline-event-heading h2 {
+  color: var(--ink);
+  font-family: var(--hd);
+  font-style: var(--hs);
+  font-weight: var(--hw);
+}
+
+.chapter-card h3,
+.character-card h3,
+.place-card h3,
+.knowledge-card h3 {
+  font-size: 21px;
+}
+
+.chapter-excerpt,
+.place-card p,
+.knowledge-card p,
+.timeline-event-card > p {
+  color: var(--muted);
+}
+
+.chapter-pov,
+.role-chip {
+  border-radius: 99px;
+}
+
+.chapter-number {
+  background: var(--acc2);
+}
+
+.character-cover {
+  background: linear-gradient(145deg, #cfdcc2, #6f9460);
+}
+
+.character-cover > span {
+  color: var(--paper);
+}
+
+.place-card-image,
+.world-map-stage,
+.world-map-empty,
+.place-image-preview,
+.map-media-option img,
+.knowledge-card-image,
+.knowledge-detail-image {
+  background-color: var(--panel);
+}
+
+.place-card-image,
+.world-map-stage,
+.world-map-empty {
+  background-image:
+    linear-gradient(rgba(111, 148, 96, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(111, 148, 96, 0.08) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.place-card-image,
+.world-map-empty > span {
+  color: var(--acc2);
+}
+
+.world-map-marker {
+  border-color: var(--paper);
+  box-shadow: 0 2px 7px rgba(24, 37, 30, 0.4);
+}
+
+.map-media-option,
+.map-media-option:has(input:checked) {
+  border-color: var(--line);
+}
+
+.map-media-option:has(input:checked) {
+  box-shadow: 0 0 0 2px rgba(111, 148, 96, 0.25);
+}
+
+.relation-chip,
+.wiki-related-list button {
+  border-radius: var(--r);
+  background: var(--tint);
+  color: var(--ink);
+}
+
+.wiki-overview-group {
+  border-color: var(--line);
+  border-radius: var(--r);
+  background: var(--paper2);
+}
+
+.wiki-overview-group button {
+  border-color: var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.wiki-overview-group button:hover {
+  background: var(--tint);
+}
+
+.wiki-infobox,
+.wiki-inline-image,
+.wiki-edit-image-preview,
+.wiki-edit-image-box {
+  border-color: var(--line);
+  background: var(--paper2);
+}
+
+.wiki-section h2 {
+  color: var(--ink);
+  font-family: var(--hd);
+  font-style: var(--hs);
+  font-weight: var(--hw);
+}
+
+.timeline-event-index {
+  background: var(--tint);
+  color: var(--ink);
+}
+
+.timeline-event-menu {
+  border-color: var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+}
+
+.timeline-event-menu button:hover:not(:disabled) {
+  background: var(--tint);
+}
+
+.chapter-number {
+  border-radius: 0 0 0 6px;
+  background: var(--accent-green);
+}
+
+.status {
+  border: 0;
+  background: var(--tint);
+  color: #425b46;
+}
+
+.editor-layout {
+  height: 100%;
+  min-height: 0;
+  grid-template-columns: 226px minmax(0, 1fr);
+  gap: 0;
+}
+
+.chapter-rail {
+  width: 226px;
+  flex: none;
+  padding: 16px 10px;
+  border-top: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 0;
+  background: var(--paper2);
+  box-shadow: none;
+}
+
+.rail-top {
+  padding: 2px 6px 10px;
+}
+
+.rail-title {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.rail-item {
+  gap: 7px;
+  padding: 9px 8px;
+  border-radius: var(--r);
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.rail-item.active {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.rail-pov,
+.path-note {
+  color: var(--muted);
+}
+
+.editor-main {
+  min-height: 0;
+  background: var(--paper);
+}
+
+.editor-crumb {
+  align-self: stretch;
+  min-height: 42px;
+  margin: 0;
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--muted);
+}
+
+.editor-crumb strong {
+  color: var(--ink);
+}
+
+.editor-pov-control select {
+  border-color: var(--line);
+  border-radius: 5px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.editor-tools {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 6px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.editor-tools button {
+  min-width: 34px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: var(--r);
+  color: var(--ink);
+}
+
+.editor-tools button:hover,
+.editor-tools button.is-on {
+  background: var(--tint);
+}
+
+.editor-mark-toggle {
+  border: 1px solid var(--line) !important;
+  border-radius: 99px !important;
+  padding: 3px 12px !important;
+}
+
+.editor-mark-toggle.is-on {
+  background: var(--tint) !important;
+}
+
+.editor-mark-toggle .toggle-track {
+  display: none;
+}
+
+.editor-tools .editor-mark-action[data-mark-type="question"] {
+  color: var(--accent);
+}
+
+.editor-tools .editor-mark-action[data-mark-type="note"] {
+  color: var(--accent-green);
+}
+
+.editor-tools-sep {
+  height: 20px;
+  margin: 0 6px;
+  border-color: var(--line);
+}
+
+.writing-mode-control {
+  color: var(--muted);
+}
+
+.writing-mode-control .select-like {
+  min-width: 120px;
+  padding: 5px 8px;
+}
+
+.editor-workspace {
+  min-height: 0;
+  flex: 1;
+  background: var(--bg);
+}
+
+.editor-wrap {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg);
+  box-shadow: none;
+}
+
+.editor-text,
+.editor-highlight {
+  right: 0;
+  left: 0;
+  width: auto;
+  padding: 35px 4vw;
+  transform: none;
+  font: 19px/1.85 var(--tx);
+}
+
+.editor-highlight {
+  z-index: 1;
+  background: var(--paper);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.1),
+    0 18px 40px -18px rgba(0, 0, 0, 0.45);
+}
+
+.editor-text {
+  z-index: 2;
+  caret-color: var(--acc);
+}
+
+.editor-text::selection {
+  color: var(--ink);
+  -webkit-text-fill-color: var(--ink);
+  background: rgba(201, 104, 74, 0.32);
+}
+
+.editor-wrap[data-writing-mode="blinders"]::before,
+.editor-wrap[data-writing-mode="blinders"]::after {
+  background: var(--bg);
+}
+
+.editor-mark-list {
+  width: 290px;
+  min-width: 290px;
+  flex: 0 0 290px;
+  padding: 16px;
+  border-left-color: var(--line);
+  background: var(--paper);
+}
+
+.editor-mark-list-heading {
+  color: var(--ink);
+}
+
+.editor-mark-card,
+.question-card {
+  border-color: var(--line);
+  border-radius: var(--r);
+  background: var(--paper2);
+}
+
+.editor-mark-card.question,
+.question-card {
+  border-left-color: var(--accent);
+}
+
+.editor-mark-card.note {
+  border-left-color: var(--accent-green);
+}
+
+.editor-mark-label,
+.editor-mark-card blockquote,
+.question-card blockquote {
+  color: var(--muted);
+}
+
+.editor-mark-card p,
+.question-card-body > p {
+  color: var(--ink);
+}
+
+.editor-mark-card-actions button,
+.question-card-actions button {
+  border-color: var(--line);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--accent-green);
+}
+
+.editor-status {
+  min-height: 34px;
+  padding: 8px 22px;
+  border-top: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--muted);
+}
+
+.wiki-layout {
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 0;
+}
+
+.wiki-sidebar {
+  border-top: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.wiki-article,
+.wiki-welcome,
+.wiki-editor {
+  border-radius: 0;
+  background-color: var(--paper);
+  box-shadow: none;
+}
+
+.wiki-index-entry.active,
+.wiki-categories button.active {
+  border-color: var(--line);
+  background: var(--tint);
+}
+
+.wiki-edit-panel,
+.wiki-edit-properties {
+  border-radius: 5px;
+}
+
+.wiki-edit-section textarea,
+.wiki-edit-section-heading input,
+.wiki-edit-table input,
+.wiki-edit-table textarea {
+  border-color: var(--line);
+  background: var(--paper);
+}
+
+.wiki-copy,
+.wiki-copy blockquote {
+  color: var(--ink);
+}
+
+.wiki-inline-link,
+.wiki-external-link,
+.timeline-chapter {
+  color: #557a4c;
+  text-decoration-color: #92aa80;
+}
+
+.timeline-event-card,
+.timeline-empty {
+  border-color: var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  box-shadow: 0 8px 18px -14px rgba(24, 37, 30, 0.55);
+}
+
+.timeline-point-dot {
+  border-color: var(--paper);
+  background: var(--accent-green);
+  box-shadow: 0 0 0 2px var(--accent-green);
+}
+
+.timeline-point-date {
+  border-color: var(--line);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.dialog {
+  border-color: var(--line);
+  border-radius: var(--r);
+  background: var(--paper);
+  box-shadow: 0 22px 70px rgba(15, 25, 20, 0.35);
+}
+
+.project-search-panel {
+  background: var(--paper);
+}
+
+.project-search-result {
+  border-radius: 5px;
+}
+
+.project-search-result:hover,
+.project-search-result[aria-current="true"] {
+  background: var(--paper2);
+}
+
+.dialog-content h2 {
+  font-style: italic;
+}
+
+.field {
+  color: var(--muted);
+}
+
+.detail-meta,
+.mention-hint {
+  color: var(--muted);
+}
+
+.relationship-map,
+.chart {
+  border-radius: var(--r);
+  background: var(--paper2);
+}
+
+.toast {
+  border-radius: var(--r);
+  background: var(--forest);
+  color: var(--paper);
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline-color: var(--accent);
+}
+
+@media (max-width: 1000px) {
+  .app-shell {
+    grid-template-columns: 208px minmax(0, 1fr);
+  }
+
+  .page {
+    padding: 24px;
+  }
+
+  .topbar {
+    gap: 10px;
+    padding: 0 14px;
+  }
+
+  .editor-layout {
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+
+  .editor-mark-list {
+    width: 230px;
+    min-width: 210px;
+    flex-basis: 230px;
+  }
+
+  .editor-text,
+  .editor-highlight {
+    padding-right: 36px;
+    padding-left: 36px;
+  }
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    grid-template-columns: 60px minmax(0, 1fr);
+  }
+
+  .app-sidebar {
+    align-items: center;
+    padding: 16px 5px 10px;
+  }
+
+  .brand {
+    align-items: center;
+    padding: 0 0 16px;
+  }
+
+  .brand-name {
+    font-size: 0;
+  }
+
+  .brand-name::after {
+    content: "M";
+    font: italic 400 28px/1 var(--serif);
+  }
+
+  .brand small,
+  .nav-group-label {
+    display: none;
+  }
+
+  .primary-nav,
+  .nav-group,
+  .sidebar-footer {
+    width: 100%;
+  }
+
+  .nav-group {
+    margin-bottom: 9px;
+  }
+
+  .primary-nav button,
+  .sidebar-link {
+    justify-content: center;
+    gap: 0;
+    padding: 10px 0;
+    font-size: 0;
+  }
+
+  .primary-nav button span,
+  .sidebar-link span {
+    width: 20px;
+    flex-basis: 20px;
+    margin: 0;
+    font-size: 16px;
+  }
+
+  .sidebar-link {
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .topbar {
+    min-height: 54px;
+    height: auto;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+  }
+
+  .project-summary {
+    min-width: 100px;
+  }
+
+  .project-summary strong {
+    font-size: 16px;
+  }
+
+  .toolbar-action {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .toolbar-action span {
+    display: none;
+  }
+
+  .page {
+    padding: 20px 16px;
+  }
+
+  .editor-layout {
+    height: auto;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chapter-rail {
+    max-height: 150px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .editor-main {
+    min-height: 540px;
+  }
+
+  .editor-workspace {
+    flex-direction: column;
+  }
+
+  .editor-mark-list {
+    width: 100%;
+    min-width: 0;
+    max-height: 220px;
+    flex: 0 0 auto;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+
+  .wiki-layout {
+    height: auto;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .wiki-sidebar {
+    max-height: 260px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}
+
+@media (max-width: 560px) {
+  .app-shell {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+
+  .topbar {
+    align-items: flex-start;
+  }
+
+  .project-summary {
+    flex: 1 1 100%;
+  }
+
+  .top-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .window-controls {
+    margin-left: 0;
+  }
+
+  .overview-grid,
+  .stat-grid,
+  .form-grid,
+  .detail-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .editor-tools {
+    padding: 6px;
+  }
+
+  .writing-mode-control {
+    width: 100%;
+    margin: 4px 0 0;
+  }
+
+  .editor-crumb {
+    padding: 8px 10px;
+  }
+
+  .editor-text,
+  .editor-highlight {
+    padding: 32px 22px;
+    font-size: 16px;
+  }
+
+  .editor-wrap {
+    padding: 0;
   }
 }

@@ -225,8 +225,37 @@ function emptyState(title, detail, buttonText, action) {
   </div>`;
 }
 
+function myceliumBackdrop() {
+  return html`<svg
+    class="mycelium-backdrop"
+    viewBox="0 0 1200 760"
+    preserveAspectRatio="xMidYMid slice"
+    aria-hidden="true"
+  >
+    <g fill="none" stroke="currentColor" stroke-linecap="round">
+      <path d="M-30 710C125 650 168 548 274 520s123-10 190-87 52-163 150-184 170 20 238-48 141-83 378-180" />
+      <path d="M115 632c23-102 5-166-55-232s-44-133 24-186 67-108 50-244" />
+      <path d="M274 520c-11-89 16-151 92-188s82-93 60-175" />
+      <path d="M464 433c92 8 147 50 176 129s89 92 179 82 151 38 203 116" />
+      <path d="M614 249c-21-99 10-159 91-181s107-64 110-142" />
+      <path d="M852 201c-14 91 19 143 96 161s111 74 105 165 44 131 160 167" />
+      <path d="M1027 21c-11 78 22 119 95 129s103 52 106 122" />
+      <path d="M59 400c94 0 150 35 169 105s70 103 151 99" />
+      <path d="M703 562c-5 75-44 122-118 141s-109 74-103 145" />
+      <path d="M1020 527c-75 38-111 96-108 175s-36 126-116 141" />
+      <circle cx="274" cy="520" r="5" />
+      <circle cx="464" cy="433" r="4" />
+      <circle cx="614" cy="249" r="5" />
+      <circle cx="852" cy="201" r="4" />
+      <circle cx="1020" cy="527" r="5" />
+    </g>
+  </svg>`;
+}
+
 function renderWelcome() {
-  page.innerHTML = html`<section class="welcome">
+  page.innerHTML = html`<section class="welcome-screen">
+    ${myceliumBackdrop()}
+    <section class="welcome">
     <h1>Deine Geschichte<br />beginnt hier.</h1>
     <p>
       Schreibe Kapitel, entwickle Figuren und behalte deinen Fortschritt im
@@ -275,12 +304,14 @@ function renderWelcome() {
           </div>
         </section>`
       : ""}
+    </section>
   </section>`;
 }
 
 function renderSettings() {
   const preference = state.preferences;
-  return html`${heading("Einstellungen")}
+  return html`<section class="mycelium-screen">
+    ${myceliumBackdrop()} ${heading("Einstellungen")}
     <div class="settings-page">
       <section class="settings-section">
         <div class="settings-section-heading">
@@ -394,7 +425,8 @@ function renderSettings() {
           Zurücksetzen
         </button>
       </div>
-    </div>`;
+    </div>
+  </section>`;
 }
 
 function renderHome() {
@@ -411,7 +443,8 @@ function renderHome() {
       String(b.updated || "").localeCompare(String(a.updated || "")),
     )
     .slice(0, 4);
-  return html`${heading("Willkommen zurück")}
+  return html`<section class="mycelium-screen">
+    ${myceliumBackdrop()} ${heading("Willkommen zurück")}
     <div class="overview-grid">
       <section class="panel">
         <div class="daily-big">
@@ -492,7 +525,8 @@ function renderHome() {
             "Kapitel erstellen",
             "new-chapter",
           )}
-    </div>`;
+    </div>
+  </section>`;
 }
 
 function chapterCard(ch, index) {
@@ -3172,6 +3206,14 @@ function applyChapterFilters() {
 }
 
 function render() {
+  const projectSummary = document.querySelector("#project-summary");
+  if (projectSummary) {
+    projectSummary.innerHTML = state.project
+      ? html`<strong>${esc(state.project.name)}</strong><small
+          >${state.project.chapters.length} Kapitel · ${format(totalWords())} Wörter</small
+        >`
+      : "<strong>Mycel</strong><small>Schreibsuite</small>";
+  }
   document
     .querySelectorAll(".primary-nav [data-page]")
     .forEach((button) =>
@@ -5281,6 +5323,11 @@ document
   .querySelector("#open-project")
   .addEventListener("click", () => void openProject());
 document.querySelector("#new-project").addEventListener("click", createProject);
+document.querySelectorAll("[data-window-control]").forEach((button) => {
+  button.addEventListener("click", () =>
+    api.controlWindow(button.dataset.windowControl),
+  );
+});
 applyPreferences();
 void Promise.all([api.currentProject(), api.recentProjects()]).then(
   ([project, recentProjects]) => {
